@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pie Clicker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 class="site-title">🥧 Pie Clicker</h1>
+  </header>
+
+  <main class="game-layout">
+    <section class="pie-column">
+      <div class="stats-panel">
+        <div class="stat">
+          <span class="stat-value" id="pie-count">0</span>
+          <span class="stat-label">pies</span>
+        </div>
+        <div class="stat stat-secondary">
+          <span class="stat-value" id="pps">0</span>
+          <span class="stat-label">pies per second</span>
+        </div>
+        <div class="stat stat-secondary">
+          <span class="stat-value" id="click-power">1</span>
+          <span class="stat-label">pies per click</span>
+        </div>
+      </div>
+
+      <div class="pie-stage">
+        <div id="click-fx-layer" aria-hidden="true"></div>
+        <button id="big-pie" type="button" aria-label="Bake a pie">🥧</button>
+      </div>
+    </section>
+
+    <section class="shop-column">
+      <div class="shop-section">
+        <h2 class="shop-section-title">Bakers</h2>
+        <div class="shop-list" id="buildings-list"></div>
+      </div>
+
+      <div class="shop-section">
+        <h2 class="shop-section-title">Upgrades</h2>
+        <div class="shop-list" id="upgrades-list"></div>
+      </div>
+
+      <div class="shop-section">
+        <h2 class="shop-section-title">Achievements</h2>
+        <div class="shop-list achievements-list" id="achievements-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <button id="reset-btn" type="button">Reset Save</button>
+  </footer>
+
+  <div id="save-toast" role="status" aria-live="polite">Game saved</div>
+
+  <script src="js/data.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
