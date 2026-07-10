@@ -146,6 +146,7 @@ body {
   transition: transform 0.08s ease-out, filter 0.15s ease-out;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  touch-action: manipulation;
 }
 
 #big-pie:hover {
@@ -250,6 +251,7 @@ body {
   padding: 0.55rem 0.75rem;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  touch-action: manipulation;
 }
 
 .shop-item-name {
@@ -342,6 +344,7 @@ body {
   cursor: pointer;
   opacity: 0.7;
   transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
 }
 
 #reset-btn:hover {
