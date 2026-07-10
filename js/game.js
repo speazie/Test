@@ -365,12 +365,13 @@
 
   function checkAchievements() {
     var changed = false;
+    var effectiveState = Object.assign({}, state, { clickPower: computeClickPower() });
     for (var i = 0; i < ACHIEVEMENTS.length; i++) {
       var a = ACHIEVEMENTS[i];
       if (state.achievementsUnlocked.indexOf(a.id) !== -1) continue;
       var met = false;
       try {
-        met = !!a.condition(state);
+        met = !!a.condition(effectiveState);
       } catch (e) {
         met = false;
       }
