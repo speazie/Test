@@ -191,29 +191,24 @@
     if (els.clickPower) els.clickPower.textContent = formatNumber(computeClickPower());
   }
 
-  function renderBuildings() {
+  function buildBuildingsList() {
     if (!els.buildingsList) return;
     els.buildingsList.innerHTML = '';
+    els.buildingItems = {};
     for (var i = 0; i < BUILDINGS.length; i++) {
       var b = BUILDINGS[i];
-      var owned = state.buildings[b.id] || 0;
-      var cost = buildingCost(b);
-      var affordable = state.pies >= cost;
 
       var item = document.createElement('button');
       item.type = 'button';
-      item.className = 'shop-item ' + (affordable ? 'affordable' : 'unaffordable');
+      item.className = 'shop-item';
       item.setAttribute('data-id', b.id);
       item.setAttribute('data-kind', 'building');
-      if (!affordable) item.disabled = true;
 
       var nameEl = document.createElement('span');
       nameEl.className = 'shop-item-name';
-      nameEl.textContent = b.name + ' (' + owned + ')';
 
       var costEl = document.createElement('span');
       costEl.className = 'shop-item-cost';
-      costEl.textContent = formatNumber(cost);
 
       var descEl = document.createElement('span');
       descEl.className = 'shop-item-desc';
@@ -227,25 +222,43 @@
       })(b.id));
 
       els.buildingsList.appendChild(item);
+      els.buildingItems[b.id] = { item: item, nameEl: nameEl, costEl: costEl };
+    }
+    updateBuildings();
+  }
+
+  function updateBuildings() {
+    if (!els.buildingItems) return;
+    for (var i = 0; i < BUILDINGS.length; i++) {
+      var b = BUILDINGS[i];
+      var refs = els.buildingItems[b.id];
+      if (!refs) continue;
+      var owned = state.buildings[b.id] || 0;
+      var cost = buildingCost(b);
+      var affordable = state.pies >= cost;
+
+      refs.nameEl.textContent = b.name + ' (' + owned + ')';
+      refs.costEl.textContent = formatNumber(cost);
+      refs.item.classList.toggle('affordable', affordable);
+      refs.item.classList.toggle('unaffordable', !affordable);
+      refs.item.disabled = !affordable;
     }
   }
 
-  function renderUpgrades() {
+  function rebuildUpgradesList() {
     if (!els.upgradesList) return;
     els.upgradesList.innerHTML = '';
+    els.upgradeItems = {};
     for (var i = 0; i < UPGRADES.length; i++) {
       var u = UPGRADES[i];
       if (isUpgradeBought(u)) continue;
       if (!isUpgradeUnlocked(u)) continue;
 
-      var affordable = state.pies >= u.cost;
-
       var item = document.createElement('button');
       item.type = 'button';
-      item.className = 'shop-item ' + (affordable ? 'affordable' : 'unaffordable');
+      item.className = 'shop-item';
       item.setAttribute('data-id', u.id);
       item.setAttribute('data-kind', 'upgrade');
-      if (!affordable) item.disabled = true;
 
       var nameEl = document.createElement('span');
       nameEl.className = 'shop-item-name';
@@ -267,6 +280,28 @@
       })(u.id));
 
       els.upgradesList.appendChild(item);
+      els.upgradeItems[u.id] = { item: item, costEl: costEl };
+    }
+    updateUpgradesAffordability();
+  }
+
+  function upgradeById(id) {
+    for (var i = 0; i < UPGRADES.length; i++) {
+      if (UPGRADES[i].id === id) return UPGRADES[i];
+    }
+    return null;
+  }
+
+  function updateUpgradesAffordability() {
+    if (!els.upgradeItems) return;
+    for (var id in els.upgradeItems) {
+      var refs = els.upgradeItems[id];
+      var u = upgradeById(id);
+      if (!refs || !u) continue;
+      var affordable = state.pies >= u.cost;
+      refs.item.classList.toggle('affordable', affordable);
+      refs.item.classList.toggle('unaffordable', !affordable);
+      refs.item.disabled = !affordable;
     }
   }
 
@@ -297,8 +332,8 @@
 
   function renderAll() {
     renderStats();
-    renderBuildings();
-    renderUpgrades();
+    buildBuildingsList();
+    rebuildUpgradesList();
     renderAchievements();
   }
 
@@ -309,7 +344,9 @@
     if (state.pies < cost) return;
     state.pies -= cost;
     state.buildings[id] = (state.buildings[id] || 0) + 1;
-    renderAll();
+    renderStats();
+    updateBuildings();
+    rebuildUpgradesList();
     saveState();
     showSaveToast();
   }
@@ -325,7 +362,9 @@
     if (state.pies < upg.cost) return;
     state.pies -= upg.cost;
     state.upgradesBought.push(upg.id);
-    renderAll();
+    renderStats();
+    updateBuildings();
+    rebuildUpgradesList();
     saveState();
     showSaveToast();
   }
@@ -359,8 +398,8 @@
     }
 
     renderStats();
-    renderBuildings();
-    renderUpgrades();
+    updateBuildings();
+    updateUpgradesAffordability();
   }
 
   function checkAchievements() {
@@ -408,8 +447,8 @@
 
     checkAchievements();
     renderStats();
-    renderBuildings();
-    renderUpgrades();
+    updateBuildings();
+    updateUpgradesAffordability();
 
     var nowMs = Date.now();
     if (nowMs - lastAutosaveTime >= AUTOSAVE_MS) {
