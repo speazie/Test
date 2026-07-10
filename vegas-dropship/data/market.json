@@ -1,0 +1,91 @@
+{
+  "_comment": "Las Vegas market signals, channel fee schedules, and scoring parameters. All figures carry a source or an 'assumption' flag.",
+  "vegas_market": {
+    "annual_visitors_2025": 38500000,
+    "visitors_change_yoy": -0.075,
+    "daily_visitors_h1_2025": 108034,
+    "convention_attendees_2025": 6000000,
+    "hotel_occupancy_2025": 0.803,
+    "metro_population_estimate": 2350000,
+    "edc_2026_total_attendance": 510000,
+    "edc_2026_dates": "May 15-17, 2026",
+    "marriage_licenses_2024": 76779,
+    "marriage_licenses_per_day": 210,
+    "wedding_economic_output_usd": 3300000000,
+    "pool_season": "March-October",
+    "extreme_heat_months": "June-August (100-110F+)",
+    "amazon_footprint": "LAS2/LAS6/LAS7 fulfillment centers (North Las Vegas) + SNV1 same-day facility handling ~600K packages/day",
+    "interpretation": "Amazon-stocked commodity SKUs are extremely well served (same-day). The under-service gap is specifically in TREND products whose dominant offers dropship from China (8-22 days) — plus deadline-driven purchases (events, parties, festivals, forgotten travel items) where same-day availability wins the sale outright.",
+    "sources": [
+      "https://www.reviewjournal.com/business/tourism/las-vegas-closes-the-book-on-2025-visitation-down-7-5-3613202/",
+      "https://www.travelweekly.com/North-America-Travel/Insights/Final-tally-confirms-weak-2025-visitation-for-Vegas",
+      "https://edmmaniac.com/festival-report-card-edc-las-vegas-2026/",
+      "https://psswestcoast.com/occasions/weddings/las-vegas-wedding-statistics-2026/",
+      "https://www.reviewjournal.com/business/how-a-unique-las-vegas-facility-allows-amazon-to-make-same-day-deliveries-2690555/",
+      "https://www.lvcva.com/research/"
+    ]
+  },
+  "scoring": {
+    "weights": { "demand": 0.35, "underservice": 0.3, "vegas_fit": 0.2, "margin": 0.15 },
+    "prime_baseline_days": 2.0,
+    "max_gap_days": 18.0,
+    "vegas_fit_range": [0.8, 1.6],
+    "gross_margin_benchmark": 0.7,
+    "notes": "underservice = midpoint(dominant offer delivery) minus 2-day Prime baseline, scaled so an 18+ day gap = 100. margin benchmark 70% per 2026 dropship gross-margin data.",
+    "sources": ["https://productlair.com/state-of-dropshipping", "https://trueprofit.io/blog/dropshipping-profit-margin"]
+  },
+  "channels": {
+    "shopify_common": {
+      "plan_monthly": 39.0,
+      "apps_monthly": 60.0,
+      "payment_pct": 0.029,
+      "payment_fixed": 0.3,
+      "notes": "Basic plan $39/mo (2.9% + 30c online with Shopify Payments); apps_monthly is a typical review/email/upsell stack (assumption). International cards +1% not modeled.",
+      "sources": ["https://www.shopify.com/pricing", "https://help.shopify.com/en/manual/intro-to-shopify/pricing-plans/pricing-overview"]
+    },
+    "vegas_3pl": {
+      "pick_pack_per_order": 3.25,
+      "packaging_per_order": 0.35,
+      "local_ship_per_order": 4.75,
+      "storage_per_unit_month": 0.15,
+      "monthly_minimum": 250.0,
+      "default_first_buy_units": 300,
+      "notes": "Vegas 3PLs quote privately; these are industry-typical planning rates (pick/pack $2.50-5.00, storage ~$25/pallet/mo, zone 1-2 ground/local courier postage). Verify with Your Logistics, Black Mountain, Red Stag LV, ShipNetwork LV.",
+      "sources": ["https://www.speedcommerce.com/3pl-companies-in-las-vegas/"]
+    },
+    "amazon_fba": {
+      "account_monthly": 39.99,
+      "fuel_surcharge_pct": 0.035,
+      "fuel_surcharge_effective": "2026-04-17",
+      "inbound_placement_small": 0.3,
+      "inbound_placement_large": 0.55,
+      "prep_per_unit": 0.35,
+      "storage_per_unit_month": { "small_standard": 0.08, "large_standard": 0.18, "large_bulky": 0.55 },
+      "fulfillment_fee_by_tier": {
+        "small_standard": 3.42,
+        "large_standard_1lb": 4.75,
+        "large_standard_2lb": 5.57,
+        "large_standard_3lb": 6.97,
+        "large_bulky": 10.19
+      },
+      "notes": "2026 schedule: referral fees unchanged (8-15% by category); fulfillment fees up ~$0.25 (small standard $10-50) effective 2026-01-15; 3.5% fuel/logistics surcharge on fulfillment fees from 2026-04-17. Tier values are representative mid-weight points from published 2026 tables ($3.11 small standard 2oz to $6.97+ large standard 3lb) — exact fee depends on precise dims/weight.",
+      "sources": [
+        "https://sellingpartners.aboutamazon.com/update-to-u-s-referral-and-fulfillment-by-amazon-fees-for-2026",
+        "https://amzprep.com/amazon-fba-fees/",
+        "https://novadata.io/resources/blog/2026-amazon-fba-fee-changes"
+      ]
+    },
+    "dropship_benchmarks": {
+      "gross_margin_avg": 0.69,
+      "net_margin_healthy": [0.15, 0.25],
+      "price_sweet_spot": [10, 30],
+      "sources": ["https://productlair.com/state-of-dropshipping", "https://trueprofit.io/blog/dropshipping-profit-margin", "https://branvas.com/blogs/news/is-dropshipping-profitable"]
+    }
+  },
+  "channel_delivery_days": {
+    "shopify_china_dropship": [10, 20],
+    "shopify_us_dropship": [3, 7],
+    "shopify_vegas_3pl": [1, 3],
+    "amazon_fba": [1, 2]
+  }
+}

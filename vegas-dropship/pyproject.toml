@@ -1,0 +1,16 @@
+[project]
+name = "vegas-dropship"
+version = "0.1.0"
+description = "Rank trending dropship products by Las Vegas delivery under-service and model Amazon-vs-Shopify channel ROI"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+vegas-dropship = "vegas_dropship.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["vegas_dropship"]
