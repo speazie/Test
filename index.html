@@ -2,63 +2,258 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pie Clicker</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TEST — Stay home. Get care. Share housing.</title>
+  <meta name="description" content="TEST connects seniors who want to stay in their own homes with vetted live-in caregivers who provide help in exchange for housing.">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
   <header class="site-header">
-    <h1 class="site-title">🥧 Pie Clicker</h1>
+    <div class="container utility-bar">
+      <div class="text-size-controls" hidden>
+        <span class="text-size-label" id="text-size-label">Text size: <strong class="text-size-status">100%</strong></span>
+        <button type="button" class="text-size-btn" data-text-size="down" aria-describedby="text-size-label">
+          A&minus;<span class="visually-hidden"> Make text smaller</span>
+        </button>
+        <button type="button" class="text-size-btn" data-text-size="up" aria-describedby="text-size-label">
+          A+<span class="visually-hidden"> Make text larger</span>
+        </button>
+      </div>
+    </div>
+    <div class="container header-bar">
+      <a class="brand" href="index.html">
+        <span class="brand-name">TEST</span>
+        <span class="brand-tagline">Care at home, for everyone involved</span>
+      </a>
+      <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav">
+        Menu
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="index.html" aria-current="page">Home</a></li>
+          <li><a href="seniors.html">For Seniors</a></li>
+          <li><a href="caregivers.html">For Caregivers</a></li>
+          <li><a href="investors.html">For Investors</a></li>
+        </ul>
+      </nav>
+    </div>
   </header>
 
-  <main class="game-layout">
-    <section class="pie-column">
-      <div class="stats-panel">
-        <div class="stat">
-          <span class="stat-value" id="pie-count">0</span>
-          <span class="stat-label">pies</span>
-        </div>
-        <div class="stat stat-secondary">
-          <span class="stat-value" id="pps">0</span>
-          <span class="stat-label">pies per second</span>
-        </div>
-        <div class="stat stat-secondary">
-          <span class="stat-value" id="click-power">1</span>
-          <span class="stat-label">pies per click</span>
-        </div>
-      </div>
+  <main id="main">
 
-      <div class="pie-stage">
-        <div id="click-fx-layer" aria-hidden="true"></div>
-        <button id="big-pie" type="button" aria-label="Bake a pie">🥧</button>
+    <section class="hero">
+      <div class="container hero-inner">
+        <div>
+          <h1>Stay in the home you love, with help you can trust.</h1>
+          <p class="lede">TEST connects seniors who want to keep living at home with carefully screened caregivers who move in and help out — in exchange for a place to live.</p>
+          <div class="btn-row">
+            <a class="btn btn-primary" href="#how-it-works">See how it works</a>
+            <a class="btn btn-secondary" href="#interest">Express interest</a>
+          </div>
+        </div>
+        <div class="hero-figure" role="presentation" aria-hidden="true"></div>
       </div>
     </section>
 
-    <section class="shop-column">
-      <div class="shop-section">
-        <h2 class="shop-section-title">Bakers</h2>
-        <div class="shop-list" id="buildings-list"></div>
-      </div>
-
-      <div class="shop-section">
-        <h2 class="shop-section-title">Upgrades</h2>
-        <div class="shop-list" id="upgrades-list"></div>
-      </div>
-
-      <div class="shop-section">
-        <h2 class="shop-section-title">Achievements</h2>
-        <div class="shop-list achievements-list" id="achievements-list"></div>
+    <section class="section" id="audiences">
+      <div class="container">
+        <div class="section-intro">
+          <h2>Which one sounds like you?</h2>
+          <p>TEST brings three groups of people together. Pick the page written for you.</p>
+        </div>
+        <div class="grid-cards">
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">&#127969;</div>
+            <h3>I want to stay in my home</h3>
+            <p>You (or a parent) would like to keep living at home, but could use a helping hand and some company. A screened live-in caregiver may make that possible — often for far less than a care facility.</p>
+            <a class="btn btn-primary" href="seniors.html">For seniors &amp; families</a>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">&#129309;</div>
+            <h3>I want to help, and I need housing</h3>
+            <p>You're caring, dependable, and finding rent hard to manage. Live with a senior, help with daily life, and get housing — plus training, support, and a way to build toward your own future.</p>
+            <a class="btn btn-primary" href="caregivers.html">For caregivers</a>
+          </article>
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">&#128200;</div>
+            <h3>I want to back the model</h3>
+            <p>An aging population, a caregiver shortage, and a housing crunch are converging. TEST is an early-stage concept for meeting all three with one model. See how the pieces fit.</p>
+            <a class="btn btn-primary" href="investors.html">For investors</a>
+          </article>
+        </div>
       </div>
     </section>
+
+    <section class="section section-white" id="how-it-works">
+      <div class="container">
+        <div class="section-intro">
+          <h2>How it works</h2>
+          <p>The idea is simple: a senior has a home with room to share. A caregiver needs housing and wants meaningful work. TEST helps them find each other safely and puts a clear agreement around it.</p>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Tell us about yourself</h3>
+            <p>Seniors and caregivers each fill out a short profile — what kind of help is needed, what kind of home is offered, and what matters most to you.</p>
+          </li>
+          <li>
+            <h3>We screen and match</h3>
+            <p>Caregivers go through background checks and interviews. We suggest matches based on needs, personality, and location — and you meet before anything is decided.</p>
+          </li>
+          <li>
+            <h3>Agree on the arrangement</h3>
+            <p>Everyone signs a clear, plain-language agreement covering the help provided, the housing offered, and how either side can end the arrangement.</p>
+          </li>
+          <li>
+            <h3>Live with ongoing support</h3>
+            <p>TEST stays involved with check-ins and support for both sides — this isn't a listing site that disappears after the introduction.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section section-tint-teal">
+      <div class="container">
+        <div class="section-intro">
+          <h2>Built around trust</h2>
+          <p>Inviting someone into a home — or moving into someone else's — takes real trust. That's why safety comes before matching, every time.</p>
+        </div>
+        <ul class="trust-list">
+          <li>
+            <span class="trust-check" aria-hidden="true">&#10003;</span>
+            <div><strong>Screened caregivers.</strong> Background checks, reference checks, and in-person interviews before anyone is matched.</div>
+          </li>
+          <li>
+            <span class="trust-check" aria-hidden="true">&#10003;</span>
+            <div><strong>Clear written agreements.</strong> Everyone knows what's expected — no vague promises, no surprises.</div>
+          </li>
+          <li>
+            <span class="trust-check" aria-hidden="true">&#10003;</span>
+            <div><strong>Family involvement welcome.</strong> Adult children can take part in every step, from the first meeting onward.</div>
+          </li>
+          <li>
+            <span class="trust-check" aria-hidden="true">&#10003;</span>
+            <div><strong>Ongoing check-ins.</strong> Regular contact with both the senior and the caregiver after the match is made.</div>
+          </li>
+        </ul>
+        <blockquote class="testimonial">
+          <p><span class="placeholder-note">[Testimonial placeholder — a real quote from an early participant will go here. Do not publish with placeholder text.]</span></p>
+          <footer>&mdash; <span class="placeholder-note">[Name, relationship to TEST]</span></footer>
+        </blockquote>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="container">
+        <div class="section-intro">
+          <h2>Common questions</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Is this the same as a home care agency?</summary>
+            <div>
+              <p>No. A home care agency sends paid staff to your home for scheduled visits. TEST matches you with one caregiver who lives with you and helps out as part of a housing arrangement. It's closer to having a trusted housemate who helps than to hiring hourly staff.</p>
+            </div>
+          </details>
+          <details>
+            <summary>What kind of help do caregivers provide?</summary>
+            <div>
+              <p>Everyday, non-medical help: cooking, errands, light housekeeping, rides, reminders, and — just as important — companionship. Caregivers are not a replacement for nurses or medical care.</p>
+            </div>
+          </details>
+          <details>
+            <summary>How are caregivers checked?</summary>
+            <div>
+              <p>Every caregiver goes through background checks, reference checks, and interviews before we introduce them to anyone. You (and your family, if you like) meet them in person before deciding anything.</p>
+            </div>
+          </details>
+          <details>
+            <summary>What does it cost?</summary>
+            <div>
+              <p>The arrangement is built on exchanging housing for help, which is why it can cost much less than a care facility or full-time hired care. Exact costs depend on each arrangement — we'll walk you through the details before you commit to anything.</p>
+            </div>
+          </details>
+          <details>
+            <summary>What if it doesn't work out?</summary>
+            <div>
+              <p>Every agreement includes a clear, fair way for either side to end the arrangement. TEST stays involved after the match, so if something isn't working, you have someone to call.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-white" id="interest">
+      <div class="container">
+        <div class="section-intro">
+          <h2>Interested? Tell us a little about you.</h2>
+          <p>No commitment — this just lets us keep you posted and reach out when TEST is ready in your area.</p>
+        </div>
+        <div class="form-notice">
+          <p><strong>Preview only:</strong> this form doesn't send anything yet. It's here so you can see how signing up will work.</p>
+        </div>
+        <br>
+        <!-- Placeholder form: no backend yet. Wire the action/method to the
+             real endpoint later; field names are stable for that purpose. -->
+        <form class="form-grid" action="#" method="post">
+          <div class="form-field">
+            <label for="interest-name">Your name</label>
+            <input type="text" id="interest-name" name="name" autocomplete="name">
+          </div>
+          <div class="form-field">
+            <label for="interest-email">Email address</label>
+            <p class="field-hint" id="interest-email-hint">We'll only use this to keep you updated about TEST.</p>
+            <input type="email" id="interest-email" name="email" autocomplete="email" aria-describedby="interest-email-hint">
+          </div>
+          <div class="form-field">
+            <label for="interest-role">I am interested as a&hellip;</label>
+            <select id="interest-role" name="role">
+              <option value="">Please choose one</option>
+              <option value="senior">Senior who wants to stay at home</option>
+              <option value="family">Family member of a senior</option>
+              <option value="caregiver">Caregiver looking for housing</option>
+              <option value="investor">Investor</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="interest-message">Anything you'd like us to know? (optional)</label>
+            <textarea id="interest-message" name="message"></textarea>
+          </div>
+          <div>
+            <button type="submit" class="btn btn-primary">Express interest</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
   </main>
 
   <footer class="site-footer">
-    <button id="reset-btn" type="button">Reset Save</button>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <p class="footer-brand">TEST</p>
+          <p>Helping seniors stay home, caregivers find housing, and communities care for each other.</p>
+        </div>
+        <nav aria-label="Footer navigation">
+          <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="seniors.html">For Seniors</a></li>
+            <li><a href="caregivers.html">For Caregivers</a></li>
+            <li><a href="investors.html">For Investors</a></li>
+          </ul>
+        </nav>
+        <div>
+          <h3>Get in touch</h3>
+          <p><span class="placeholder-note">[Contact email placeholder]</span></p>
+          <p><span class="placeholder-note">[Mailing address placeholder]</span></p>
+        </div>
+      </div>
+      <p class="footer-disclaimer">TEST is an early-stage concept. Nothing on this site is financial, legal, or medical advice, and no specific outcomes are promised. Program details may change as the concept develops. &copy; 2026 TEST.</p>
+    </div>
   </footer>
 
-  <div id="save-toast" role="status" aria-live="polite">Game saved</div>
-
-  <script src="js/data.js"></script>
-  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

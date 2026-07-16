@@ -1,0 +1,715 @@
+/* ==========================================================================
+   TEST — shared design system
+   One stylesheet for every page. Mobile-first, rem-based, WCAG AA palette.
+
+   Conventions for page authors:
+   - Wrap page sections in <section class="section"> with an inner
+     <div class="container">.
+   - Use .btn / .btn-primary / .btn-secondary for all calls-to-action.
+   - Body text pairs: ink on paper, ink on white, white on primary.
+     All token pairs below were contrast-checked at >= 4.5:1 (most >= 7:1).
+   - Base body size is 18px (html at 112.5%); every size below is rem/em so
+     the whole site scales with the reader's text-size preference.
+   ========================================================================== */
+
+/* ---- Design tokens ---- */
+:root {
+  --color-ink: #1F2933;         /* body text */
+  --color-ink-muted: #52606D;   /* secondary text, 6.1:1 on paper */
+  --color-paper: #FBF9F4;       /* warm page background */
+  --color-white: #FFFFFF;
+  --color-primary: #14595B;     /* deep teal — buttons, links (8:1 w/ white) */
+  --color-primary-dark: #0C4345;
+  --color-teal-tint: #E3EFEE;   /* soft panel background */
+  --color-amber-tint: #FCEFD9;  /* warm panel background */
+  --color-footer: #1F2933;
+  --color-footer-text: #F5F3EE;
+  --color-border: #D5D0C4;
+  --color-placeholder-bg: #FFF8E1; /* labeled-placeholder callouts */
+  --color-placeholder-border: #B45309;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+
+  --space-1: 0.5rem;
+  --space-2: 0.75rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2.25rem;
+  --space-6: 3.5rem;
+
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+  --shadow-card: 0 1px 3px rgba(31, 41, 51, 0.10), 0 4px 14px rgba(31, 41, 51, 0.06);
+  --content-max: 70rem;
+  --text-max: 42rem; /* comfortable line length for body copy */
+  --tap-min: 3rem;   /* 48px minimum tap target at default text size */
+}
+
+/* ---- Reset / base ---- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 112.5% of the 16px browser default = 18px base body text.
+     The header text-size buttons scale this value up to 200%. */
+  font-size: 112.5%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--color-ink);
+  background-color: var(--color-paper);
+  -webkit-text-size-adjust: 100%;
+}
+
+img,
+svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.2;
+  margin: 0 0 var(--space-3);
+  overflow-wrap: break-word;
+}
+
+h1 { font-size: clamp(1.9rem, 1.5rem + 2vw, 2.75rem); }
+h2 { font-size: clamp(1.5rem, 1.3rem + 1vw, 2rem); }
+h3 { font-size: 1.25rem; }
+
+p, ul, ol {
+  margin: 0 0 var(--space-3);
+  max-width: var(--text-max);
+}
+
+li {
+  margin-bottom: var(--space-1);
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+}
+
+/* One obvious keyboard-focus style everywhere */
+:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Layout ---- */
+.container {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+}
+
+.section {
+  padding-block: var(--space-6);
+}
+
+.section-tint-teal { background-color: var(--color-teal-tint); }
+.section-tint-amber { background-color: var(--color-amber-tint); }
+.section-white { background-color: var(--color-white); }
+
+.section-intro {
+  max-width: var(--text-max);
+  margin-bottom: var(--space-5);
+}
+
+.lede {
+  font-size: 1.2rem;
+  color: var(--color-ink-muted);
+}
+
+/* Cards reflow on their own as text grows or screens shrink */
+.grid-cards {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+/* Screen-reader-only text (e.g. fuller button labels) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Skip link ---- */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--color-primary);
+  color: var(--color-white);
+  padding: var(--space-2) var(--space-4);
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0;
+  color: var(--color-white);
+}
+
+/* ---- Header ---- */
+.site-header {
+  background: var(--color-white);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.utility-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.text-size-label {
+  font-size: 0.9rem;
+  color: var(--color-ink-muted);
+}
+
+.text-size-btn {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  border: 2px solid var(--color-primary);
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.text-size-btn:hover {
+  background: var(--color-teal-tint);
+}
+
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  text-decoration: none;
+  min-height: var(--tap-min);
+  align-items: center;
+}
+
+.brand-name {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--color-primary);
+}
+
+.brand-tagline {
+  font-size: 0.85rem;
+  color: var(--color-ink-muted);
+  display: none;
+}
+
+/* ---- Navigation ---- */
+.nav-toggle {
+  display: none; /* shown via .js-enabled on small screens */
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  align-items: center;
+  gap: var(--space-1);
+  border: 2px solid var(--color-primary);
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  padding-inline: var(--space-2);
+  cursor: pointer;
+}
+
+.site-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  max-width: none;
+}
+
+.site-nav li {
+  margin: 0;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: var(--space-1) var(--space-3);
+  text-decoration: none;
+  font-weight: 600;
+  color: var(--color-ink);
+  border-radius: var(--radius);
+  border: 2px solid transparent;
+}
+
+.site-nav a:hover {
+  background: var(--color-teal-tint);
+  color: var(--color-primary-dark);
+}
+
+.site-nav a[aria-current="page"] {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* Small screens with JS: nav collapses behind the Menu button */
+@media (max-width: 47.99em) {
+  .js-enabled .nav-toggle {
+    display: inline-flex;
+  }
+
+  .js-enabled .site-nav {
+    flex-basis: 100%;
+  }
+
+  .js-enabled .site-nav[hidden] {
+    display: none;
+  }
+
+  .js-enabled .site-nav ul {
+    flex-direction: column;
+    align-items: stretch;
+    padding-bottom: var(--space-3);
+  }
+
+  .js-enabled .site-nav a {
+    display: flex;
+    width: 100%;
+    border: 2px solid var(--color-border);
+    justify-content: center;
+  }
+
+  .js-enabled .site-nav a[aria-current="page"] {
+    border-color: var(--color-primary);
+  }
+}
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
+  /* Side padding caps at 4vw so buttons still fit a narrow phone when the
+     reader scales text to 200%; wrap rules are a last-resort safety net. */
+  padding: var(--space-2) min(var(--space-4), 4vw);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-dark);
+  color: var(--color-white);
+}
+
+.btn-secondary {
+  background: var(--color-white);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-secondary:hover {
+  background: var(--color-teal-tint);
+  color: var(--color-primary-dark);
+}
+
+/* Generous spacing so grouped buttons are hard to mis-tap */
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* ---- Hero ---- */
+.hero {
+  background: var(--color-teal-tint);
+  padding-block: var(--space-6);
+}
+
+.hero h1 {
+  max-width: 24ch;
+}
+
+.hero .lede {
+  color: var(--color-ink);
+  margin-bottom: var(--space-4);
+}
+
+/* ---- Cards ---- */
+.card {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+}
+
+.card h3 {
+  color: var(--color-primary);
+}
+
+.card .btn {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.card-icon {
+  font-size: 2rem;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+}
+
+/* ---- "How it works" steps ---- */
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  counter-reset: step;
+}
+
+.steps li {
+  counter-increment: step;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin: 0;
+}
+
+.steps li::before {
+  content: counter(step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-white);
+  font-weight: 800;
+  font-size: 1.15rem;
+  margin-bottom: var(--space-2);
+}
+
+.steps h3 {
+  margin-bottom: var(--space-1);
+}
+
+.steps p {
+  margin-bottom: 0;
+}
+
+/* ---- Trust components ---- */
+.trust-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  max-width: none;
+}
+
+.trust-list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin: 0;
+}
+
+.trust-check {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  margin-top: 0.15rem;
+}
+
+.testimonial {
+  background: var(--color-white);
+  border-left: 0.375rem solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin: 0;
+  max-width: var(--text-max);
+}
+
+.testimonial p {
+  font-size: 1.1rem;
+  font-style: italic;
+}
+
+.testimonial footer {
+  color: var(--color-ink-muted);
+  font-size: 0.95rem;
+}
+
+/* ---- Labeled placeholder (content the owner will replace) ---- */
+.placeholder-note {
+  display: inline-block;
+  background: var(--color-placeholder-bg);
+  border: 2px dashed var(--color-placeholder-border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.95rem;
+  font-style: normal;
+  color: var(--color-ink); /* stays readable inside the dark footer too */
+}
+
+/* ---- FAQ (native details/summary, no JS needed) ---- */
+.faq details {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-2);
+  max-width: var(--text-max);
+}
+
+.faq summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: var(--space-3) var(--space-4);
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary::after {
+  content: "+";
+  font-size: 1.5rem;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.faq details[open] summary::after {
+  content: "\2212"; /* minus sign */
+}
+
+.faq details > div {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+/* ---- Forms ---- */
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
+  max-width: var(--text-max);
+}
+
+.form-field label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: var(--space-1);
+}
+
+.form-field .field-hint {
+  font-size: 0.95rem;
+  color: var(--color-ink-muted);
+  margin-bottom: var(--space-1);
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  min-height: var(--tap-min);
+  font-family: inherit;
+  font-size: 1rem;
+  color: var(--color-ink);
+  background: var(--color-white);
+  border: 2px solid var(--color-ink-muted);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+}
+
+.form-field textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.form-notice {
+  background: var(--color-placeholder-bg);
+  border: 2px dashed var(--color-placeholder-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  max-width: var(--text-max);
+}
+
+.form-notice p {
+  margin: 0;
+}
+
+/* ---- Footer ---- */
+.site-footer {
+  background: var(--color-footer);
+  color: var(--color-footer-text);
+  padding-block: var(--space-5);
+  margin-top: var(--space-6);
+}
+
+.site-footer a {
+  color: var(--color-footer-text);
+}
+
+.footer-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.footer-brand {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.site-footer ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.site-footer li {
+  margin-bottom: var(--space-1);
+}
+
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+}
+
+.footer-disclaimer {
+  font-size: 0.9rem;
+  color: #C7CDD4; /* 9.2:1 on footer ink */
+  border-top: 1px solid #3E4C59;
+  padding-top: var(--space-3);
+  max-width: none;
+}
+
+/* ---- Wider screens ---- */
+@media (min-width: 48em) {
+  .brand-tagline {
+    display: inline;
+  }
+
+  .hero-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    gap: var(--space-5);
+    align-items: center;
+  }
+}
+
+/* Decorative hero panel (pure CSS, no image download) */
+.hero-figure {
+  display: none;
+}
+
+@media (min-width: 48em) {
+  .hero-figure {
+    display: block;
+    border-radius: var(--radius-lg);
+    min-height: 16rem;
+    background:
+      linear-gradient(160deg, rgba(20, 89, 91, 0.12) 0%, rgba(20, 89, 91, 0.28) 100%),
+      var(--color-white);
+    border: 1px solid var(--color-border);
+    position: relative;
+  }
+
+  .hero-figure::after {
+    content: "\1F3E1"; /* house emoji as a friendly, zero-download visual */
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+  }
+}
