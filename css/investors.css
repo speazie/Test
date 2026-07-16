@@ -212,6 +212,10 @@ body.page-investors .model-core-list li {
   padding: 0.35rem 0.9rem;
   font-size: 0.95rem;
   font-weight: 600;
+  /* Pills are flex items; let them shrink and wrap at 200% text. */
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 body.page-investors .model-caption {
@@ -233,6 +237,8 @@ body.page-investors .concept-badge {
   border-radius: 999rem;
   padding: 0.3rem 0.85rem;
   margin-bottom: var(--space-2);
+  max-width: 100%;
+  overflow-wrap: anywhere; /* wide letter-spaced caps can exceed 375px at 200% */
 }
 
 /* ---- Paired status panels (built vs. being designed, etc.) ---- */

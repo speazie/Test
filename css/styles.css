@@ -67,6 +67,10 @@ body {
   color: var(--color-ink);
   background-color: var(--color-paper);
   -webkit-text-size-adjust: 100%;
+  /* Last-resort word breaking: at 200% text on a narrow phone, ordinary
+     long words can exceed a column's width; break them rather than let
+     them widen the page. Inherits everywhere. */
+  overflow-wrap: break-word;
 }
 
 img,
@@ -407,7 +411,9 @@ a:hover {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  padding: var(--space-4);
+  /* Padding caps at 5vw so scaled-up text keeps a readable line length
+     on narrow phones (matches the .btn padding strategy). */
+  padding: min(var(--space-4), 5vw);
   display: flex;
   flex-direction: column;
 }
@@ -444,7 +450,7 @@ a:hover {
   background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  padding: min(var(--space-4), 5vw);
   margin: 0;
 }
 
@@ -486,6 +492,13 @@ a:hover {
   gap: var(--space-2);
   align-items: flex-start;
   margin: 0;
+}
+
+/* Let the text block shrink below its longest word so 200% text on a
+   narrow phone wraps instead of forcing the page wider. */
+.trust-list li > div {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .trust-check {
@@ -531,6 +544,8 @@ a:hover {
   font-size: 0.95rem;
   font-style: normal;
   color: var(--color-ink); /* stays readable inside the dark footer too */
+  max-width: 100%;
+  overflow-wrap: break-word; /* long bracketed labels wrap at 200% text */
 }
 
 /* ---- FAQ (native details/summary, no JS needed) ---- */
@@ -545,13 +560,16 @@ a:hover {
 .faq summary {
   cursor: pointer;
   font-weight: 700;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) min(var(--space-4), 5vw);
   min-height: var(--tap-min);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
   list-style: none;
+  /* The question text is an anonymous flex item; "anywhere" (unlike
+     break-word) lets its min-content shrink so long words wrap at 200%. */
+  overflow-wrap: anywhere;
 }
 
 .faq summary::-webkit-details-marker {
