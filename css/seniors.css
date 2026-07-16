@@ -1,0 +1,71 @@
+/* ==========================================================================
+   TEST — "For Seniors" page-specific styles.
+   Loaded AFTER css/styles.css. Every rule is scoped under body.page-seniors.
+
+   This is the warmest, largest-type page on the site: body copy inside
+   <main> gets a gentle bump and sections breathe a little more. The shared
+   header, nav, and footer are left at their site-wide metrics on purpose,
+   so they line up identically on every page. All sizes are rem/em, so the
+   A-/A+ text-size control keeps scaling everything together.
+   ========================================================================== */
+
+/* Larger, more relaxed body copy — scoped to <main> only. */
+body.page-seniors main {
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+
+/* Keep the type hierarchy ahead of the bumped body copy.
+   (These elements have fixed rem sizes in styles.css, so they would not
+   grow with the inherited bump above; each is nudged up to match.) */
+body.page-seniors main .lede {
+  font-size: 1.3rem;
+}
+
+body.page-seniors main h3 {
+  font-size: 1.35rem;
+}
+
+body.page-seniors main .btn {
+  font-size: 1.1rem;
+}
+
+body.page-seniors main .testimonial p {
+  font-size: 1.15rem;
+}
+
+/* A touch more breathing room between sections and around intros. */
+body.page-seniors .section {
+  padding-block: 4rem;
+}
+
+body.page-seniors .section-intro {
+  margin-bottom: 2.5rem;
+}
+
+/* Simple checklist with a little extra air between the lines. */
+body.page-seniors .checklist li {
+  margin-bottom: var(--space-2);
+}
+
+/* Quiet reassurance line under a row of buttons. */
+body.page-seniors .gentle-note {
+  color: var(--color-ink-muted);
+  font-size: 1rem;
+  margin-top: var(--space-3);
+}
+
+/* Plain-spoken callout box for the things we most want understood
+   (e.g. "caregivers are not nurses", "nothing is decided for you"). */
+body.page-seniors .callout {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-left: 0.375rem solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  max-width: var(--text-max);
+}
+
+body.page-seniors .callout > :last-child {
+  margin-bottom: 0;
+}
