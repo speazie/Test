@@ -1,0 +1,21 @@
+/* ==========================================================================
+   TEST — For Caregivers page-specific styles
+   Loaded after styles.css. Every rule is scoped under body.page-caregivers.
+   Uses existing design tokens only — no new colors, no new contrast pairs.
+   ========================================================================== */
+
+/* A warmer, more energetic hero for the caregiver audience: swaps the shared
+   teal hero background for the existing amber tint. Ink text on
+   --color-amber-tint is the same pair the design system already uses for
+   .section-tint-amber (contrast-checked at >= 4.5:1 per styles.css). */
+body.page-caregivers .hero {
+  background: var(--color-amber-tint);
+}
+
+@media (min-width: 48em) {
+  /* Key emoji instead of the default house: housing, opportunity, a door
+     opening. Purely decorative (the figure is aria-hidden in the markup). */
+  body.page-caregivers .hero-figure::after {
+    content: "\1F511";
+  }
+}
