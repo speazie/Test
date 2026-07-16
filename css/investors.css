@@ -1,0 +1,271 @@
+/* ==========================================================================
+   TEST — For Investors page styles
+   Loaded AFTER css/styles.css. Every rule is scoped under body.page-investors
+   so nothing here can leak into other pages. All sizes are rem/em so the
+   page reflows cleanly when the A-/A+ control scales text up to 200%.
+
+   New color pairs verified >= 4.5:1 (see scratchpad/investors-contrast.js):
+   - #F5F3EE on #1F2933  13.31:1  (dark-section body text)
+   - #FFFFFF on #1F2933  14.76:1  (dark-section headings)
+   - #C7CDD4 on #1F2933   9.21:1  (dark-section muted lede)
+   - #9BD9D2 on #1F2933   9.31:1  (eyebrow accent on dark)
+   - #F5F3EE on #14595B   7.26:1  (worst case over the decorative teal glow)
+   - #FFFFFF on #0C4345  11.03:1  (pills inside the model-core panel)
+   - #7C4A03 on #FCEFD9   6.51:1  ("under development" badge)
+   ========================================================================== */
+
+/* ---- Dark sections (hero + closing CTA) ---- */
+body.page-investors .section-dark {
+  background:
+    radial-gradient(circle at 85% 15%, rgba(20, 89, 91, 0.5), transparent 45%),
+    var(--color-footer);
+  color: var(--color-footer-text);
+  padding-block: var(--space-6);
+}
+
+body.page-investors .section-dark h1,
+body.page-investors .section-dark h2 {
+  color: var(--color-white);
+}
+
+body.page-investors .section-dark h1 {
+  max-width: 26ch;
+}
+
+body.page-investors .section-dark .lede {
+  color: #C7CDD4;
+  margin-bottom: var(--space-4);
+}
+
+body.page-investors .section-dark p {
+  color: var(--color-footer-text);
+}
+
+body.page-investors .eyebrow {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9BD9D2;
+  margin-bottom: var(--space-2);
+}
+
+body.page-investors .hero-note {
+  font-size: 0.95rem;
+  color: #C7CDD4;
+  margin-top: var(--space-3);
+  margin-bottom: 0;
+}
+
+/* ---- Stat tiles (placeholder market figures) ---- */
+body.page-investors .stat-tiles {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  max-width: none;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+body.page-investors .stat-tile {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-top: 0.375rem solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  margin: 0;
+}
+
+body.page-investors .stat-tile h3 {
+  font-size: 1.1rem;
+  margin-bottom: var(--space-2);
+}
+
+body.page-investors .stat-figure {
+  margin-bottom: var(--space-2);
+}
+
+body.page-investors .stat-tile p:last-child {
+  margin-bottom: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.95rem;
+}
+
+/* ---- Three-sided model diagram (pure CSS/HTML) ---- */
+body.page-investors .model-diagram {
+  margin: 0;
+}
+
+body.page-investors .model-nodes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+body.page-investors .model-node {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  margin: 0;
+}
+
+body.page-investors .model-node h3 {
+  color: var(--color-primary);
+  font-size: 1.15rem;
+  margin-bottom: var(--space-2);
+}
+
+body.page-investors .model-exchange {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+body.page-investors .model-exchange li {
+  margin-bottom: var(--space-2);
+}
+
+body.page-investors .model-exchange li:last-child {
+  margin-bottom: 0;
+}
+
+body.page-investors .exchange-tag {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+
+/* Connector between the three nodes and the platform panel below them.
+   Purely decorative; on narrow screens only the vertical stem shows. */
+body.page-investors .model-connector {
+  height: 2.75rem;
+  position: relative;
+}
+
+body.page-investors .model-connector::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  border-left: 0.1875rem solid var(--color-primary);
+  transform: translateX(-50%);
+}
+
+@media (min-width: 48em) {
+  body.page-investors .model-connector::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 16.5%;
+    right: 16.5%;
+    border-top: 0.1875rem solid var(--color-primary);
+  }
+}
+
+body.page-investors .model-core {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  text-align: center;
+}
+
+body.page-investors .model-core h3 {
+  color: var(--color-white);
+  margin-bottom: var(--space-1);
+}
+
+body.page-investors .model-core > p {
+  margin-inline: auto;
+  margin-bottom: var(--space-3);
+}
+
+body.page-investors .model-core-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+body.page-investors .model-core-list li {
+  margin: 0;
+  background: var(--color-primary-dark);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999rem;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+body.page-investors .model-caption {
+  margin-top: var(--space-4);
+  max-width: var(--text-max);
+  color: var(--color-ink-muted);
+}
+
+/* ---- "Under development" badge ---- */
+body.page-investors .concept-badge {
+  display: inline-block;
+  background: var(--color-amber-tint);
+  border: 1px solid var(--color-placeholder-border);
+  color: #7C4A03;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 999rem;
+  padding: 0.3rem 0.85rem;
+  margin-bottom: var(--space-2);
+}
+
+/* ---- Paired status panels (built vs. being designed, etc.) ---- */
+body.page-investors .status-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+body.page-investors .status-panel {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+body.page-investors .status-panel h3 {
+  color: var(--color-primary);
+}
+
+body.page-investors .status-panel ul {
+  margin-bottom: 0;
+  padding-left: 1.2rem;
+}
+
+/* ---- Investor disclaimer box ---- */
+body.page-investors .invest-disclaimer {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-left: 0.375rem solid var(--color-placeholder-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  max-width: none;
+  margin: 0;
+}
