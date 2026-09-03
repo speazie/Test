@@ -17,8 +17,9 @@ remember on the night.
 
 Scoring was checked line by line against the model: 6-pt passing TD (Yahoo
 default is 4), full PPR, −2 INT, **−1 per sack**, **−3 pick-six**, +2 for each
-40+ yard TD, −2 fumble lost. **Every one matches what the projections assume.**
-The edge is real and it is not a modelling artefact.
+40+ yard TD, −2 fumble lost. **Every line is implemented correctly.** But see
+*"Read this before you trust the QB plan"* below — the −1 sack and −2 INT
+settings cancel the 6-point bonus, so the scoring is not an edge.
 
 A minute per pick is far more slack than "picks move in seconds" implied. Even
 with the bridge switched off entirely, tap entry finishes a pick in about a
@@ -91,13 +92,14 @@ interception** (defaults: 0 and −1). Those cancel. A QB throwing ~30 TDs gains
 **−5 VOR** and everything else by ~0. Stafford is the model's QB1 under standard
 scoring too — worth *more* there (69 VOR) than here (64).
 
-So the Stafford pick at 55 is a **bet on our projection of him**, not an
-arbitrage. We say 346 points; Yahoo has him 113th overall, below Brock Purdy.
-That is a real disagreement and it may well be right — the model beats naive
-forecasting at every position in backtest — but it is a forecasting bet, and
-his projection is one of the model-only ones with no consensus check.
+**Stafford is no longer in the plan at all.** The data audit found he had never
+received the model's own TD-luck correction — he threw 46 TDs on 597 attempts, a
+7.7% rate against a league 4.88%, and the regression that every other QB got was
+never applied to him. Correcting it drops him from QB1 (+64 VOR) to about QB11
+(−6). See `AUDIT.md`.
 
-Take him if you believe the projection. Don't take him because of the rules.
+The plan now takes **Kyle Pitts Sr. at 55** and **Bo Nix at 66** — a quarterback
+a round later, and one who did receive his correction.
 
 Measured sensitivity, now correctly labelled as *projection* disagreement rather
 than scoring:
