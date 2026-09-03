@@ -1,17 +1,17 @@
-// How much of the edge survives if the league is NOT asleep?
+// How much of the edge survives if the field does not disagree with us?
 //
-// Every title-rate number in this repo is produced with opponents drafting the
-// raw ESPN board -- that is, priced for 4-point passing TDs, never noticing the
-// league's 6-point setting. That is the most favourable possible assumption
-// about nine other humans, and it is baked into the simulation silently.
+// NOTE ON WHAT THIS MEASURES. It was written believing it swept "how far the
+// field has noticed the league's 6-point passing TDs". It does not, because
+// there is nothing to notice: the -1 sack and -2 INT settings cancel the
+// 6-point bonus almost exactly, so this league's scoring shifts QB value by
+// about -5 VOR and everything else by ~0 (see FINDINGS.md section 0).
 //
-// It is also questionable. Yahoo's own draft room displays ranks adjusted to
-// the league's actual scoring settings, so a manager who drafts off the board
-// in front of him is *already* partly corrected, without knowing why.
-//
-// This sweeps that assumption. `adjust` = how far opponents have repriced
-// toward our scoring: 0 = raw ESPN board (what every other sim here assumes),
-// 1 = they value players exactly as we do and the edge is gone.
+// What it actually sweeps is PROJECTION AGREEMENT. `adjust` interpolates the
+// opponents' board from the real Yahoo list toward OUR OWN VOR ordering:
+//   0 = they draft the Yahoo board (what they will really do)
+//   1 = they value every player exactly as our model does
+// So the decay below is the price of the field converging on our player
+// opinions -- not of it discovering a rules exploit. Read it that way.
 //
 //   node sim/opponent_stress.js
 const { fresh, freshFrom, engineSource } = require('./harness');
@@ -156,8 +156,8 @@ function qbSignal(adjust) {
 }
 
 console.log('Opponent adjustment sweep — how much of the edge is real?');
-console.log('adjust 0 = field drafts the raw ESPN board (what every other sim here assumes)');
-console.log('adjust 1 = field values players exactly as we do (no edge left)\n');
+console.log('adjust 0 = field drafts the real Yahoo board (what they will actually do)');
+console.log('adjust 1 = field shares our player projections (no disagreement left)\n');
 console.log('seasons per cell: ' + (SEEDS.length * DRAFTS * SEASONS) + '\n');
 console.log('adjust   Stafford board rank    playoffs     title');
 console.log('-'.repeat(58));
@@ -175,5 +175,6 @@ for (const adj of [0, 0.25, 0.5, 0.75, 1.0]) {
     (100 * made / n).toFixed(1).padStart(14) + '%' +
     (100 * titles / n).toFixed(1).padStart(9) + '%');
 }
-console.log('\nThe drop from adjust=0 to adjust=1 is the part of the edge that exists');
-console.log('only because the league has not noticed the scoring setting.');
+console.log('\nThe decay above is the price of the field agreeing with our PROJECTIONS.');
+console.log('It is not a scoring exploit: this league\'s rules move QB value by about');
+console.log('-5 VOR and everything else by ~0. See FINDINGS.md section 0.');

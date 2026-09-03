@@ -89,8 +89,11 @@ against what the projections assume:
 | Fumble lost | −2 | — | −2 ✓ |
 | Roster | QB/WR/WR/RB/RB/TE/W-R-T/K/DEF + 6 BN + 2 IR | | matches `SLOTS` ✓ |
 
-**The quarterback edge is real and correctly specified.** Nothing in the
-scoring needed changing.
+**Every scoring line is correctly implemented** — the model computes this
+league's rules faithfully. What section 0 shows is that the *conclusion* drawn
+from those rules was wrong: the −1 sack and −2 INT lines cancel the 6-point TD
+bonus, so there is no QB edge to be had from the scoring. The implementation is
+right; the story about it was not.
 
 Two documentation errors found: the draft is a **Live Standard Draft** (Fri Sep
 4, 9:30pm EDT, 1-minute clock), not the Offline Draft the prompt and README
@@ -246,16 +249,25 @@ already partly corrected without needing to understand why.
 `sim/opponent_stress.js` sweeps it. `adjust` = how far the field has repriced
 toward our valuations (0 = raw ESPN board, 1 = they value players as we do):
 
+Re-run against the **real Yahoo board** (Stafford starts at his true rank of 113):
+
 | adjust | Stafford's board rank | Playoffs | **Title** |
 |---|---|---|---|
-| **0 — every other sim here** | 86 | 88.9% | **40.7%** |
-| 0.25 | 68 | 73.6% | **26.7%** |
-| **0.5 — the tool's own mock-draft default** | 50 | 44.7% | **11.4%** |
-| 0.75 | 31 | 23.2% | 4.4% |
-| 1.0 | 13 | 19.5% | 3.9% |
+| **0 — the field drafts the Yahoo board** | 113 | 89.4% | **39.5%** |
+| 0.25 | 88 | 76.9% | **29.0%** |
+| **0.5 — the tool's own mock-draft default** | 63 | 55.4% | **16.6%** |
+| 0.75 | 38 | 25.4% | 5.7% |
+| 1.0 | 13 | 19.1% | 4.2% |
 
-**A quarter-correction costs 14 title points. A half-correction takes the edge
-to 11.4% — a rounding error above the 10% random baseline.**
+**Read this as projection agreement, not scoring.** Section 0 shows there is no
+rules exploit to notice, so `adjust` is really "how far the field's player
+opinions converge on ours". A quarter of the way costs 10 title points; halfway
+takes it to 16.6%, close to the 10% random baseline.
+
+That is still a real and useful sensitivity — it says the entire edge is
+*disagreement*, and disagreement is only worth something if we are right. Given
+section 2 (only 1.2 of 15 picks come from consensus-checked projections), that
+is a large amount of weight resting on unvalidated numbers.
 
 Note the middle row. The tool's own mock draft ships with `ADJUST = 0.5`,
 described in its source as *"they have noticed and half-corrected"*. At exactly
@@ -267,14 +279,14 @@ because they live in different files.
 
 1. **Quote a much lower number.** Between this and the self-referential
    projections, a defensible expectation is meaningfully below the README's
-   15–30%. The edge is real but conditional on the field staying asleep.
-2. **The `HIDE` button is not paranoia.** It is the single cheapest way to
-   protect the largest sensitivity in the model.
+   15–30%. The edge is real but it is entirely a bet that our projections beat
+   the field's — there is no rules arbitrage underneath it.
+2. **`HIDE` is now about tidiness, not secrecy.** It was justified as protecting
+   a scoring exploit. There is no exploit to protect. Keep using it if someone
+   is looking over your shoulder, but it is no longer load-bearing.
 3. **Watch the QB pace indicator.** The engine already measures whether a
-   position is going faster than its board implies, and pulls players forward
-   when it is. If quarterbacks start going early, the field has adjusted — and
-   the tool will react on its own. That mechanism is the hedge, and it already
-   exists.
+   position is going faster than its board implies and pulls players forward.
+   If quarterbacks start going early it will react on its own.
 
 ## 3. Six tuning knobs are dead
 

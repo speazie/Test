@@ -82,31 +82,38 @@ board persists across a reload, so nothing is lost if the page refreshes.
    the draft has not started, tap **ARM**.
 5. That is it. Picks now land by themselves.
 
-## The thing that actually decides whether this works
+## Read this before you trust the QB plan
 
-The whole edge is that the other nine managers are pricing quarterbacks for
-4-point passing TDs. Measured sensitivity to that assumption:
+**The "6-point passing TD exploit" is not real.** The league does pay 6 per
+passing TD instead of 4 — but it also pays **−1 per sack** and **−2 per
+interception** (defaults: 0 and −1). Those cancel. A QB throwing ~30 TDs gains
+~60 and gives back ~50. Net, this league's rules move quarterback value by about
+**−5 VOR** and everything else by ~0. Stafford is the model's QB1 under standard
+scoring too — worth *more* there (69 VOR) than here (64).
 
-| If the field has repriced... | Your title odds |
+So the Stafford pick at 55 is a **bet on our projection of him**, not an
+arbitrage. We say 346 points; Yahoo has him 113th overall, below Brock Purdy.
+That is a real disagreement and it may well be right — the model beats naive
+forecasting at every position in backtest — but it is a forecasting bet, and
+his projection is one of the model-only ones with no consensus check.
+
+Take him if you believe the projection. Don't take him because of the rules.
+
+Measured sensitivity, now correctly labelled as *projection* disagreement rather
+than scoring:
+
+| If the field's player opinions converge on ours... | Your title odds |
 |---|---|
-| not at all | 40.7% |
-| a quarter of the way | 26.7% |
-| **halfway** | **11.4%** |
-| fully | 3.9% |
+| not at all (they draft the Yahoo board) | 39.5% |
+| a quarter of the way | 29.0% |
+| **halfway** | **16.6%** |
+| fully | 4.2% |
 
-A random team is 10%. **Halfway corrected and the edge is gone.** Note Yahoo's
-draft room shows ranks adjusted to your league's scoring, so the field is not
-starting from zero.
+A random team is 10%. The whole edge is disagreement, and disagreement only pays
+if we are right.
 
-Two practical consequences:
-
-1. **Use HIDE if anyone can see your screen.** The reasoning text names the
-   exploit out loud. This is the cheapest possible insurance on the single
-   largest sensitivity in the model.
-2. **Watch when quarterbacks start going.** If they go earlier than their ADP,
-   the field has noticed. You do not need to do anything — the engine measures
-   position pace and pulls players forward automatically — but it tells you what
-   kind of draft you are in.
+**Watch when quarterbacks start going.** If they go earlier than their board
+rank, the engine measures position pace and pulls players forward on its own.
 
 ## One judgement call the tool cannot make for you
 
