@@ -44,7 +44,16 @@ const m3 = A.matchBoardName('Robinson', { pos: 'WR', team: 'NYG' });
 eq('"Robinson" + NYG + WR resolves', m3.p.n, "Wan'Dale Robinson");
 // A position that contradicts the name must drag confidence down.
 const m4 = A.matchBoardName('Bijan Robinson', { pos: 'QB' });
-eq('contradicting position lowers confidence', m4.conf <= 0.4, true);
+eq('contradicting position still needs a tap', m4.conf < 0.85, true);
+// A player who changed teams since the pool was built: the name is exact and
+// unique, so it is our team field that is stale, not the match. It must still
+// commit, and it must say so.
+const m7 = A.matchBoardName('A.J. Brown', { pos: 'WR', team: 'PHI' });
+eq('stale team on an exact name still commits', m7.conf >= 0.85, true);
+eq('and it reports the discrepancy', /PHI/.test(m7.stale || ''), true);
+// The same stale team on an AMBIGUOUS name must not commit.
+const m8 = A.matchBoardName('Brown', { pos: 'WR', team: 'PHI' });
+eq('stale team on an ambiguous name does not commit', m8.conf < 0.85, true);
 // Yahoo abbreviates first names on narrow layouts.
 const m5 = A.matchBoardName('M. Stafford', { pos: 'QB', team: 'LAR' });
 eq('"M. Stafford" + QB + LAR resolves', m5.p.n, 'Matthew Stafford');

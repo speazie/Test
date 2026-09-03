@@ -503,11 +503,24 @@ function matchBoardName(raw,hint){
   // Ambiguous on the name and NOT separated by the hints: this is the case that
   // silently corrupts the board, so it must never clear the auto-commit bar.
   if(tied.length>1&&sep<=0) conf=Math.min(conf,0.5);
-  if(h.pos) conf = top.p.p===h.pos ? Math.min(1,conf+0.12) : Math.min(conf,0.4);
-  if(h.team&&norm(h.team).length>1)
-    conf = norm(h.team)===norm(top.p.t) ? Math.min(1,conf+0.12) : Math.min(conf,0.45);
-  if(top.gone||top.mine) return {p:top.p,conf,why:"already off the board",dup:true};
-  return {p:top.p,conf,why:"matched",alts:tied.slice(1,4).map(c=>c.p)};
+  // An EXACT, unique full-name match identifies a player outright in a pool of
+  // 237. If Yahoo then disagrees about his team, by far the likeliest
+  // explanation is that our team field is stale — players change teams every
+  // offseason — not that this is a different man with the same full name. So a
+  // team disagreement is reported rather than treated as a failed match.
+  // Position is far more stable than team, so a position clash still demands a
+  // tap even on an exact name.
+  const exactUnique = top.s>=1000 && tied.length===1;
+  let stale=null;
+  if(h.pos) conf = top.p.p===h.pos ? Math.min(1,conf+0.12)
+                                   : Math.min(conf, exactUnique?0.8:0.4);
+  if(h.team&&norm(h.team).length>1){
+    if(norm(h.team)===norm(top.p.t)) conf=Math.min(1,conf+0.12);
+    else if(exactUnique){ conf=Math.min(conf,0.9); stale="board says "+h.team+", our data says "+top.p.t; }
+    else conf=Math.min(conf,0.45);
+  }
+  if(top.gone||top.mine) return {p:top.p,conf,why:"already off the board",dup:true,stale};
+  return {p:top.p,conf,why:"matched",alts:tied.slice(1,4).map(c=>c.p),stale};
 }
 // A board read is committed without asking only above this bar. Everything
 // below it goes to the confirm strip instead.
@@ -534,7 +547,8 @@ function ingestPick(name,opt){
   const o=opt||{};
   const p=byName[name]; if(!p) return {ok:false,why:"unknown player"};
   if(gone.has(name)||mine.includes(name)) return {ok:false,why:"already off the board"};
-  const rec={n:name,pick:o.pick||curPick(),src:o.src||"board",conf:o.conf==null?1:o.conf,mine:!!o.mine};
+  const rec={n:name,pick:o.pick||curPick(),src:o.src||"board",conf:o.conf==null?1:o.conf,
+             mine:!!o.mine,note:o.note||null};
   if(o.mine) takeIt(name); else markGone(name);
   feed.push(rec); if(feed.length>200) feed.shift();
   return {ok:true,rec};
@@ -753,6 +767,7 @@ function renderFeed(){
       '<span class="fdn">'+rec.n+(rec.mine?' <span class="pknum me">YOURS</span>':'')+'</span>'+
       '<span class="fdp">'+(rec.src==="board"?"auto":rec.src)+
       (rec.conf<0.85?" "+Math.round(rec.conf*100)+"%":"")+'</span>';
+    if(rec.note) d.innerHTML+='<span class="fdp" title="'+rec.note+'">\u26a0</span>';
     const u=document.createElement("button");
     u.textContent="UNDO";
     u.onclick=()=>{ undoPick(rec.n); render(); };

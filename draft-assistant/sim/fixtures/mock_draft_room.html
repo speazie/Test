@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mock draft room (test fixture)</title>
+<style>
+  body{font:14px system-ui,sans-serif;margin:0;background:#f4f5f7;color:#111}
+  .cols{display:flex;gap:16px;padding:16px;max-width:900px}
+  .col{flex:1;background:#fff;border:1px solid #d7dbe0;border-radius:6px;padding:10px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#666;margin:0 0 8px}
+  ul{list-style:none;margin:0;padding:0}
+  li{padding:6px 4px;border-bottom:1px solid #eee;font-size:13px}
+  .pk{color:#888;font-variant-numeric:tabular-nums;margin-right:8px}
+  .meta{color:#777;font-size:11px}
+</style>
+</head>
+<body>
+<!--
+  A deliberately imperfect stand-in for the Yahoo draft room. It is NOT claimed
+  to match Yahoo's real markup — the whole point of the reader is that it does
+  not depend on markup. What this fixture reproduces is the SHAPE of the
+  problem:
+
+    * a pick log that grows one row at a time, with round.pick numbers;
+    * an available-players list, sitting right next to it, full of names that
+      must NEVER be treated as drafted;
+    * names written the way boards write them (abbreviated first initial,
+      team and position in the same cell, suffixes).
+-->
+<div class="cols">
+  <div class="col">
+    <h2>Draft Results</h2>
+    <ul id="picklog"></ul>
+  </div>
+  <div class="col">
+    <h2>Available Players</h2>
+    <ul id="available"></ul>
+  </div>
+</div>
+
+<script>
+// Rows are written in a few different styles on purpose, so the reader is not
+// tested against one tidy format.
+const PICKS = [
+  ["1.01", "Bijan Robinson", "ATL - RB"],
+  ["1.02", "Jahmyr Gibbs", "DET - RB"],
+  ["1.03", "J. Chase", "CIN - WR"],
+  ["1.04", "Jaxon Smith-Njigba", "SEA - WR"],
+  ["1.05", "Malik Nabers", "NYG - WR"],
+  ["1.06", "Brian Thomas Jr.", "JAX - WR"],
+  ["1.07", "A.J. Brown", "PHI - WR"],
+  ["1.08", "De'Von Achane", "MIA - RB"],
+  ["1.09", "Amon-Ra St. Brown", "DET - WR"],
+  ["1.10", "M. Stafford", "LAR - QB"],
+];
+// The available list contains real pool players. If the reader ever scans it,
+// the board is destroyed — that is the assertion that matters most.
+const AVAILABLE = [
+  ["Saquon Barkley", "PHI - RB"], ["Puka Nacua", "LAR - WR"],
+  ["Derrick Henry", "BAL - RB"], ["Travis Kelce", "KC - TE"],
+  ["Breece Hall", "NYJ - RB"], ["Garrett Wilson", "NYJ - WR"],
+  ["Josh Allen", "BUF - QB"], ["Bucky Irving", "TB - RB"],
+  ["George Pickens", "DAL - WR"], ["Jordan Addison", "MIN - WR"],
+];
+
+const log = document.getElementById("picklog");
+const avail = document.getElementById("available");
+
+AVAILABLE.forEach(([n, m]) => {
+  const li = document.createElement("li");
+  li.innerHTML = n + ' <span class="meta">' + m + ' · ADP 24 · bye 9</span>';
+  avail.appendChild(li);
+});
+
+let made = 0;
+window.addPick = function (k) {
+  const n = k == null ? 1 : k;
+  for (let i = 0; i < n && made < PICKS.length; i++) {
+    const [pk, name, meta] = PICKS[made++];
+    const li = document.createElement("li");
+    li.innerHTML = '<span class="pk">' + pk + '</span>' + name +
+                   ' <span class="meta">' + meta + '</span>';
+    log.appendChild(li);
+  }
+  return made;
+};
+window.picksMade = () => made;
+</script>
+</body>
+</html>

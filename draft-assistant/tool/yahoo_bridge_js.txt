@@ -1,0 +1,398 @@
+// ============================================================================
+// YAHOO DRAFT BOARD BRIDGE
+//
+// Reads picks off the live Yahoo draft room and feeds them to the engine, so
+// no player name is ever typed.
+//
+// WHY THIS DOES NOT PARSE YAHOO'S MARKUP
+// I could not open a live Yahoo draft room while writing this, so any CSS
+// selector I hardcoded would be a guess that fails silently on draft night —
+// the worst possible failure, because a silent board is indistinguishable from
+// a slow one. Instead the reader is built on the one thing that cannot change:
+// WE ALREADY KNOW ALL 237 NAMES. It scans text for names from our own pool and
+// watches which ones APPEAR. That works whether Yahoo renders a table, a list,
+// or a virtualised grid, and it survives a redesign.
+//
+// THE ONE HARD PROBLEM
+// The draft room shows two lists of players: the picks already made, and the
+// players still available. Scanning the whole page would mark the available
+// list as drafted — every player, instantly. The reader therefore never scans
+// the whole page. It scans ONE container that you bind with a single click,
+// and it cross-checks that container's behaviour: a pick log only ever GAINS
+// names. If a scan produces a burst of additions, it stops and asks rather
+// than committing, because a burst means the wrong container.
+// ============================================================================
+
+const BR = {
+  el: null,            // the bound container
+  path: null,          // a re-findable path to it, so a reload rebinds itself
+  seen: new Set(),     // pool names already read out of it
+  pending: [],         // low-confidence reads waiting on a tap
+  armed: false,        // committing, as opposed to just watching
+  lastCount: 0,
+  paused: false,
+  note: "",
+};
+const BR_KEY = "sstlv-bridge-v1";
+const BURST_LIMIT = 5;   // more additions than this in one scan = wrong region
+
+// ---- locating the container again after a reload ----
+function elPath(el) {
+  const parts = [];
+  for (let n = el; n && n.nodeType === 1 && n !== document.body; n = n.parentElement) {
+    const par = n.parentElement;
+    if (!par) break;
+    parts.unshift(Array.prototype.indexOf.call(par.children, n));
+  }
+  return parts.join("/");
+}
+function elFromPath(path) {
+  if (!path) return null;
+  let n = document.body;
+  for (const i of path.split("/")) {
+    if (!n) return null;
+    n = n.children[+i];
+  }
+  return n || null;
+}
+
+// ---- reading names out of the bound container ----
+// Yahoo prints a pick as something like "1.06  Bijan Robinson  ATL - RB". We
+// take each row's whole text and let the matcher deal with the noise, because
+// the matcher already handles abbreviations, punctuation and suffixes.
+// A round.pick token is only trusted at the START of a row. Anywhere else a
+// "12.5" is far more likely to be projected points than round 12 pick 5, and a
+// bogus pick number moves the whole counter.
+const RE_PICK_DOT = /^\(?(\d{1,2})\.(\d{1,2})\)?(?!\d)/;  // "3.07 Bijan Robinson"
+const RE_PICK_WORD = /\bpick\s*#?\s*(\d{1,3})\b/i;        // Pick 27
+const RE_POS = /\b(QB|RB|WR|TE|K|DEF|DST|D\/ST)\b/;
+const RE_TEAM = /\b(ARI|ATL|BAL|BUF|CAR|CHI|CIN|CLE|DAL|DEN|DET|GB|HOU|IND|JAX|KC|LAC|LAR|LV|MIA|MIN|NE|NO|NYG|NYJ|PHI|PIT|SEA|SF|TB|TEN|WAS)\b/;
+
+// textContent glues adjacent elements together: "<span>1.01</span>Bijan" reads
+// as "1.01Bijan", which matches neither a pick number nor a name. Walking the
+// text nodes and joining on element boundaries restores the separation the row
+// visually has.
+function rowText(el) {
+  let out = "";
+  (function walk(n) {
+    if (n.nodeType === 3) { out += " " + n.nodeValue; return; }
+    if (n.nodeType !== 1) return;
+    for (let c = n.firstChild; c; c = c.nextSibling) walk(c);
+    out += " ";
+  })(el);
+  return out.replace(/\s+/g, " ").trim();
+}
+
+function rowsOf(container) {
+  // Prefer real row-ish children; fall back to the container itself.
+  const kids = container.querySelectorAll("li,tr,[role=row],div");
+  const out = [];
+  const seenText = new Set();
+  const push = el => {
+    const t = rowText(el);
+    if (!t || t.length > 160) return;          // a huge blob is a wrapper, not a row
+    if (seenText.has(t)) return;
+    seenText.add(t);
+    out.push({ el, text: t });
+  };
+  if (kids.length) kids.forEach(push); else push(container);
+  return out;
+}
+
+function parseRow(text) {
+  let pick = null;
+  const d = text.match(RE_PICK_DOT);
+  // 10-team snake: round 1-15, slot 1-10. Anything outside that is not a pick.
+  if (d && +d[1] >= 1 && +d[1] <= 15 && +d[2] >= 1 && +d[2] <= 10) {
+    pick = (+d[1] - 1) * 10 + (+d[2]);
+  } else {
+    const w = text.match(RE_PICK_WORD);
+    if (w && +w[1] >= 1 && +w[1] <= 150) pick = +w[1];
+  }
+  const pm = text.match(RE_POS);
+  let pos = pm ? pm[1] : null;
+  if (pos === "DEF" || pos === "D/ST") pos = "DST";
+  const tm = text.match(RE_TEAM);
+  // Strip the tokens the matcher should not see as part of the name.
+  const name = text
+    .replace(RE_PICK_DOT, " ").replace(RE_PICK_WORD, " ")
+    .replace(RE_POS, " ").replace(RE_TEAM, " ")
+    .replace(/\b(bye|adp|rank|pts|proj)\b.*$/i, " ")
+    .replace(/\s+/g, " ").trim();
+  return { pick, pos, team: tm ? tm[1] : null, name };
+}
+
+// Every pool player currently readable inside `el`. Pure: no state touched.
+function readRegion(el) {
+  const out = [];
+  const dedupe = new Set();
+  for (const row of rowsOf(el)) {
+    const info = parseRow(row.text);
+    if (!info.name || info.name.length < 2) continue;
+    const m = matchBoardName(info.name, { pos: info.pos, team: info.team });
+    if (!m.p || dedupe.has(m.p.n)) continue;
+    dedupe.add(m.p.n);
+    out.push({ player: m.p, conf: m.conf, pick: info.pick, alts: m.alts || [],
+               raw: row.text, stale: m.stale || null });
+  }
+  return out;
+}
+
+// You will click a player's NAME, or the team abbreviation next to it, or the
+// whitespace in a row — never the list element itself. Binding the exact node
+// under the cursor therefore binds a leaf that holds one field of one row, and
+// the reader sees nothing. So walk up from whatever was clicked and take the
+// ancestor that actually looks like the list.
+// Climbing must also know when to STOP. Climbing while the count keeps rising
+// walks straight past the pick list into whatever wrapper holds the pick list
+// AND the available list — which then imports the entire player pool as drafted.
+//
+// The discriminator is the pick number. A pick log prints one per row; an
+// available-players list does not. So the target is the SMALLEST ancestor that
+// sees the most pick-numbered rows: going higher adds names but no new pick
+// numbers, which is exactly the signal that we have left the log.
+const MAX_REGION = 60;
+function resolveContainer(el) {
+  const levels = [];
+  let n = el;
+  for (let up = 0; up < 8 && n && n !== document.body; up++) {
+    const reads = readRegion(n);
+    levels.push({ el: n, all: reads.length, withPick: reads.filter(r => r.pick).length });
+    n = n.parentElement;
+  }
+  if (!levels.length) return el;
+  // Deepest-first, so the first hit is always the smallest qualifying element.
+  const bestPick = Math.max.apply(null, levels.map(l => l.withPick));
+  if (bestPick >= 2) {
+    for (const l of levels) if (l.withPick === bestPick) return l.el;
+  }
+  // No pick numbers anywhere (some boards do not print them): settle for the
+  // smallest ancestor that sees more than one player, which is the row list.
+  for (const l of levels) if (l.all >= 2 && l.all <= MAX_REGION) return l.el;
+  let best = levels[0];
+  for (const l of levels) if (l.all > best.all && l.all <= MAX_REGION) best = l;
+  return best.el;
+}
+
+// One pass over the bound container. Returns the reads it has not seen before.
+function scanRegion() {
+  if (!BR.el || !document.contains(BR.el)) {
+    const again = elFromPath(BR.path);
+    if (!again) { BR.note = "lost the board region — rebind it"; return []; }
+    BR.el = again;
+  }
+  const all = readRegion(BR.el);
+  let maxPick = 0;
+  for (const r of all) if (r.pick && r.pick > maxPick && r.pick <= 150) maxPick = r.pick;
+  if (maxPick) setBoardPick(maxPick + 1);
+  return all.filter(r => !BR.seen.has(r.player.n));
+}
+
+// ---- committing ----
+function bridgeTick() {
+  if (!BR.armed || BR.paused) return;
+  const fresh = scanRegion();
+  if (!fresh.length) { if (BR.el) bridgeSeen = Date.now(); return; }
+  bridgeSeen = Date.now();
+
+  // A burst means the container is probably the available-players list, not the
+  // pick log. Committing 200 players would destroy the board, so stop instead.
+  if (fresh.length > BURST_LIMIT && BR.lastCount > 0) {
+    BR.paused = true;
+    BR.note = fresh.length + " new names at once — that looks like the available " +
+              "list, not the pick log. Nothing was committed.";
+    renderBridgePanel();
+    return;
+  }
+
+  const myPickSet = new Set(myPicks());
+  for (const f of fresh) {
+    BR.seen.add(f.player.n);
+    // Never auto-commit a shaky read. It goes to the confirm strip, where it is
+    // one tap — still no typing, but a wrong guess cannot slip through.
+    if (f.conf < AUTO_COMMIT) { BR.pending.push(f); continue; }
+    const isMine = f.pick ? myPickSet.has(f.pick) : false;
+    ingestPick(f.player.n, { src: "board", conf: f.conf, pick: f.pick || undefined,
+                             mine: isMine, note: f.stale });
+  }
+  BR.lastCount = BR.seen.size;
+  saveBridge();
+  render();
+  renderBridgePanel();
+}
+
+function confirmPending(i, mineFlag) {
+  const f = BR.pending[i];
+  if (!f) return;
+  BR.pending.splice(i, 1);
+  ingestPick(f.player.n, { src: "confirmed", conf: 1, pick: f.pick || undefined, mine: !!mineFlag });
+  saveBridge();
+  render();
+  renderBridgePanel();
+}
+function rejectPending(i) {
+  const f = BR.pending[i];
+  if (!f) return;
+  BR.pending.splice(i, 1);
+  BR.seen.delete(f.player.n);   // let it be re-read if it really was a pick
+  renderBridgePanel();
+}
+
+function saveBridge() {
+  try {
+    localStorage.setItem(BR_KEY, JSON.stringify({ path: BR.path, seen: [...BR.seen], armed: BR.armed }));
+  } catch (e) {}
+}
+function loadBridge() {
+  try {
+    const d = JSON.parse(localStorage.getItem(BR_KEY) || "null");
+    if (!d) return;
+    BR.path = d.path || null;
+    BR.seen = new Set(d.seen || []);
+    BR.armed = !!d.armed;
+    BR.lastCount = BR.seen.size;
+    if (BR.path) BR.el = elFromPath(BR.path);
+  } catch (e) {}
+}
+
+// ---- binding the region by clicking it ----
+let picking = false, hiBox = null;
+function startPick() {
+  if (picking) return;
+  picking = true;
+  BR.note = "Click the part of the page that lists the picks already made.";
+  renderBridgePanel();
+  hiBox = document.createElement("div");
+  hiBox.style.cssText = "position:fixed;z-index:2147483646;pointer-events:none;" +
+    "border:2px solid #F5C518;background:rgba(245,197,24,.14);border-radius:4px";
+  document.body.appendChild(hiBox);
+  document.addEventListener("mousemove", onHover, true);
+  document.addEventListener("click", onPickClick, true);
+  document.addEventListener("keydown", onPickKey, true);
+}
+function stopPick() {
+  picking = false;
+  if (hiBox) { hiBox.remove(); hiBox = null; }
+  document.removeEventListener("mousemove", onHover, true);
+  document.removeEventListener("click", onPickClick, true);
+  document.removeEventListener("keydown", onPickKey, true);
+}
+function onHover(e) {
+  const el = e.target;
+  if (!el || el === hiBox || HOST.contains(el)) return;
+  // Outline what would ACTUALLY be bound, not the leaf under the cursor, so
+  // there is no surprise about what got picked.
+  const r = resolveContainer(el).getBoundingClientRect();
+  hiBox.style.left = r.left + "px"; hiBox.style.top = r.top + "px";
+  hiBox.style.width = r.width + "px"; hiBox.style.height = r.height + "px";
+}
+function onPickKey(e) { if (e.key === "Escape") { stopPick(); BR.note = ""; renderBridgePanel(); } }
+function onPickClick(e) {
+  if (HOST.contains(e.target)) return;
+  e.preventDefault(); e.stopPropagation();
+  const el = resolveContainer(e.target);
+  stopPick();
+  BR.el = el;
+  BR.path = elPath(el);
+  // Everything already visible in this region is the state BEFORE we started
+  // watching. Seed it as "seen" but do not commit it — joining mid-draft, the
+  // user imports it explicitly with one tap.
+  const found = scanRegion();
+  BR.pending = [];
+  BR.note = found.length
+    ? "Bound. " + found.length + " players already on the board — IMPORT them, or " +
+      "ARM to only take picks from here on."
+    : "Bound, and it is empty right now. ARM and the next pick will come in automatically.";
+  BR.preload = found;
+  renderBridgePanel();
+}
+function importPreload() {
+  const list = BR.preload || [];
+  const myPickSet = new Set(myPicks());
+  // Import in board order so the pick numbers line up.
+  list.sort((a, b) => (a.pick || 999) - (b.pick || 999));
+  for (const f of list) {
+    BR.seen.add(f.player.n);
+    const isMine = f.pick ? myPickSet.has(f.pick) : false;
+    ingestPick(f.player.n, { src: "import", conf: f.conf, pick: f.pick || undefined, mine: isMine });
+  }
+  BR.preload = [];
+  BR.armed = true;
+  BR.lastCount = BR.seen.size;
+  BR.note = "Imported " + list.length + " picks. Watching for new ones.";
+  saveBridge(); render(); renderBridgePanel();
+}
+function armOnly() {
+  (BR.preload || []).forEach(f => BR.seen.add(f.player.n));
+  BR.preload = [];
+  BR.armed = true;
+  BR.paused = false;
+  BR.lastCount = BR.seen.size;
+  BR.note = "Watching. New picks will appear automatically.";
+  saveBridge(); renderBridgePanel();
+}
+
+// ---- the bridge's own panel, inside the shadow root ----
+function renderBridgePanel() {
+  const box = UIROOT.getElementById("brPanel");
+  if (!box) return;
+  const state = !BR.el ? "unbound" : BR.paused ? "paused" : BR.armed ? "live" : "bound";
+  let h = '<div class="brhd">BOARD BRIDGE — <b>' + state.toUpperCase() + '</b></div>';
+  if (BR.note) h += '<div class="brnote">' + BR.note + '</div>';
+  h += '<div class="brbtns">';
+  h += '<button id="brBind">' + (BR.el ? "REBIND REGION" : "BIND THE PICK LIST") + '</button>';
+  if (BR.preload && BR.preload.length) h += '<button id="brImport">IMPORT ' + BR.preload.length + '</button>';
+  if (BR.el && !BR.armed) h += '<button id="brArm">ARM</button>';
+  if (BR.armed && !BR.paused) h += '<button id="brPause">PAUSE</button>';
+  if (BR.paused) h += '<button id="brResume">RESUME</button>';
+  h += '<button id="brRescan">RESCAN</button>';
+  h += '</div>';
+  if (BR.pending.length) {
+    h += '<div class="brhd" style="margin-top:8px">NEEDS ONE TAP — not sure enough to commit</div>';
+    BR.pending.forEach((f, i) => {
+      h += '<div class="brp"><div class="brpn">' + f.player.n +
+        ' <span class="pos ' + f.player.p + '">' + f.player.p + '</span>' +
+        ' <span class="brpc">' + Math.round(f.conf * 100) + '%</span></div>' +
+        '<div class="brpr">read: “' + f.raw.slice(0, 60) + '”</div>' +
+        '<div class="brbtns"><button data-ok="' + i + '">GONE</button>' +
+        '<button data-mine="' + i + '">MINE</button>' +
+        '<button data-no="' + i + '">NOT HIM</button></div></div>';
+    });
+  }
+  box.innerHTML = h;
+  const B = id => UIROOT.getElementById(id);
+  if (B("brBind")) B("brBind").onclick = startPick;
+  if (B("brImport")) B("brImport").onclick = importPreload;
+  if (B("brArm")) B("brArm").onclick = armOnly;
+  if (B("brPause")) B("brPause").onclick = () => { BR.paused = true; renderBridgePanel(); };
+  if (B("brResume")) B("brResume").onclick = () => { BR.paused = false; BR.note = ""; renderBridgePanel(); };
+  if (B("brRescan")) B("brRescan").onclick = () => { BR.lastCount = 0; bridgeTick(); };
+  box.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => confirmPending(+b.getAttribute("data-ok"), false));
+  box.querySelectorAll("[data-mine]").forEach(b => b.onclick = () => confirmPending(+b.getAttribute("data-mine"), true));
+  box.querySelectorAll("[data-no]").forEach(b => b.onclick = () => rejectPending(+b.getAttribute("data-no")));
+}
+
+// ---- run ----
+// A MutationObserver catches the common case instantly. The interval is the
+// backstop for the case that actually bites: Yahoo replacing the whole subtree,
+// which detaches the observer without any error.
+loadBridge();
+new MutationObserver(() => { if (BR.armed && !BR.paused) bridgeTick(); })
+  .observe(document.body, { childList: true, subtree: true, characterData: true });
+setInterval(() => { if (BR.armed && !BR.paused) bridgeTick(); }, 1500);
+renderBridgePanel();
+if (BR.armed) bridgeTick();
+
+// Deliberate escape hatch. The browser tests drive the real UI, but they assert
+// against this; and on draft night it is the fastest way to see what the reader
+// is actually reading when something looks wrong. Console-only, no UI.
+window.__sstlv = {
+  BR, scanRegion, bridgeTick, matchBoardName, searchPlayers, ingestPick,
+  curPick, desync, likelyNext,
+  state: () => ({
+    bound: !!BR.el, armed: BR.armed, paused: BR.paused,
+    pick: curPick(), gone: gone.size, mine: mine.slice(),
+    seen: [...BR.seen], pending: BR.pending.map(p => p.player.n),
+    feed: feed.slice(-10), note: BR.note,
+  }),
+};

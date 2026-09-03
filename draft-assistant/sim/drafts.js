@@ -1,11 +1,8 @@
 // Run full 10-team drafts: my slot uses the tool's recommend(); the other nine
 // draft from the ESPN board with roster needs. Records every team's roster.
 const fs=require('fs');
-const js=fs.readFileSync('/mnt/user-data/outputs/live-draft-assistant.html','utf8').split('<script>')[1].split('</script>')[0];
-function fresh(){global.window={storage:{set:async()=>{},get:async()=>null},scrollTo:()=>{}};
-const mk=()=>({className:'',textContent:'',innerHTML:'',value:'',offsetTop:0,setAttribute(){},appendChild(){},append(){},addEventListener(){},set onclick(v){}});
-global.document={getElementById:mk,createElement:mk};global.alert=()=>{};global.confirm=()=>true;
-return new Function(js+"return {PLAYERS,recommend,markGone,takeIt,myPicks,setSlot:v=>{slot=v},getMine:()=>mine,getGone:()=>gone};")();}
+const path=require('path');
+const {fresh, ROOT}=require('./harness');   // gated: never runs on a stale build
 const TEAMS=10,ROUNDS=15;
 const OMAX={QB:2,RB:6,WR:7,TE:2,K:1,DST:1}, OREQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1};
 function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
@@ -54,7 +51,8 @@ for(let i=0;i<N;i++){
   for(let t=1;t<=TEAMS;t++) teams.push(r[t].map(p=>({n:p.n,p:p.p,e:p.e,b:p.b})));
   out.push({mine:SLOT,teams});
 }
-fs.writeFileSync('/home/claude/v3/drafts.json',JSON.stringify(out));
-console.log('simulated '+N+' full drafts from slot '+SLOT);
+const OUTFILE=path.join(ROOT,'sim','drafts.json');
+fs.writeFileSync(OUTFILE,JSON.stringify(out));
+console.log('simulated '+N+' full drafts from slot '+SLOT+' -> '+OUTFILE);
 const sizes=out[0].teams.map(t=>t.length);
 console.log('roster sizes:',sizes.join(','));

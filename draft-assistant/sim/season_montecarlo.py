@@ -1,6 +1,10 @@
-import json, numpy as np
-D=json.load(open('drafts.json')); CV=json.load(open('/home/claude/proj/cv.json'))
-CV['K']=0.45; CV['DST']=0.75
+import json, os, numpy as np
+HERE=os.path.dirname(os.path.abspath(__file__))
+D=json.load(open(os.path.join(HERE,'drafts.json')))
+# Measured weekly coefficients of variation, 2022-24 (README section 4). These
+# used to be read from a file outside the bundle, so this script could not run
+# at all from a clean checkout.
+CV={'QB':0.472,'RB':0.518,'WR':0.561,'TE':0.623,'K':0.45,'DST':0.75}
 # Backtested MAE of the projection model, per game -> per season error
 MAE={'QB':4.67,'RB':2.63,'WR':2.15,'TE':1.82,'K':1.2,'DST':2.0}
 BYEW=list(range(1,16)); PO=[16,17]

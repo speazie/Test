@@ -80,4 +80,9 @@ node -e '
   console.log("  pool: "+Object.entries(c).map(([k,v])=>k+" "+v).join(", ")+" ("+p.length+" players)");
 ' || fail "player pool too small — mandatory-fill mode can freeze (README bug #8)"
 
+# ---- second target: the Yahoo bridge userscript ----
+# Same sources, same hash. Both artifacts are stamped, so a stale one is caught.
+node tool/make_userscript.js "$HASH" || fail "userscript generation failed"
+node --check tool/yahoo-draft-bridge.user.js || fail "userscript has a syntax error"
+
 echo "build ok -> $OUT ($(wc -c < "$OUT") bytes, sha256:${HASH:0:16}…)"

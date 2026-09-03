@@ -2,9 +2,8 @@
 // Every candidate config drafts full 10-team leagues from slot 6, then plays
 // 15-week seasons + a 2-week playoff with real weekly variance AND the model's
 // own backtested projection error applied to "true" talent.
-const fs=require('fs');
-const html=fs.readFileSync('/mnt/user-data/outputs/live-draft-assistant.html','utf8');
-const js=html.split('<script>')[1].split('</script>')[0];
+const {freshFrom, engineSource}=require('./harness');  // gated on build freshness
+const js=engineSource();
 const CV={QB:0.472,RB:0.518,WR:0.561,TE:0.623,K:0.45,DST:0.75};
 const MAE={QB:4.67,RB:2.63,WR:2.15,TE:1.82,K:1.2,DST:2.0};
 const TEAMS=10,ROUNDS=15;
@@ -12,13 +11,8 @@ let SEED=1; function rnd(){SEED=(SEED*1103515245+12345)&0x7fffffff;return SEED/0
 function gauss(){let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();
   return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
 function build(cfg){
-  global.window={storage:{set:async()=>{},get:async()=>null},scrollTo:()=>{}};
-  const mk=()=>({className:'',textContent:'',innerHTML:'',value:'',offsetTop:0,
-    setAttribute(){},appendChild(){},append(){},addEventListener(){},set onclick(v){}});
-  global.document={getElementById:mk,createElement:mk};
-  global.alert=()=>{};global.confirm=()=>true;
-  return new Function('CFG_OVERRIDE', js+
-    'return {PLAYERS,recommend,markGone,takeIt,myPicks,setSlot:v=>{slot=v},getMine:()=>mine,getGone:()=>gone};')(cfg);
+  return freshFrom(js,cfg,
+    'PLAYERS,recommend,markGone,takeIt,myPicks,setSlot:v=>{slot=v},getMine:()=>mine,getGone:()=>gone');
 }
 const OMAX={QB:2,RB:6,WR:7,TE:2,K:1,DST:1}, OREQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1};
 function draft(cfg,slot){
