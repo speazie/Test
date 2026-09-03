@@ -5,7 +5,73 @@ and the scripts named under each heading.
 
 ---
 
-## 0. THE HEADLINE: the "6-point passing TD exploit" does not exist
+## 00. Stafford's #1 ranking is a DATA BUG, not an edge
+
+He is the model's QB1 by 29 points and its 13th-best player overall, against a
+Yahoo rank of 113. That gap is not insight. **The model's own TD-luck
+correction was never applied to him.**
+
+**`Matthew Stafford` has no entry in `data/td_luck.json`.** 135 of 164 skill
+players have one. He does not — and he is the most extreme TD outlier in the
+entire dataset:
+
+| | 2025 | vs league |
+|---|---|---|
+| Passing TDs | **46** on 597 attempts | — |
+| TD rate | **7.70%** | league 4.88% → **1.58×** |
+| Rushing TDs | 0 on 29 carries | so the correction is ~all passing |
+
+README section 2 states the policy plainly: TD rate repeats at only r=0.13–0.17
+while volume repeats at 0.63–0.70, therefore **regress TDs 83% to league rate**.
+It names Allen −55 as an example. Josh Allen's shipped correction is −54.5.
+Stafford's is absent.
+
+### Reconstructing the missing correction
+
+Applying the documented rule (keep 17% of passing TD rate, 13% of rushing, else
+league rate) reproduces the shipped values — **Josh Allen: −54.9 computed vs
+−54.5 shipped**, and Stafford's correction is almost entirely the passing
+component, which is the half that matches best.
+
+| Player | EV now | Est. correction | EV after | VOR now | VOR after |
+|---|---|---|---|---|---|
+| **Matthew Stafford** | 346 | **−76** | 270 | **+64** | **−12** |
+| Jared Goff | 303 | −24 | 279 | +21 | −3 |
+| Brock Purdy | 250 | −37 | 213 | −32 | −69 |
+| Joe Burrow | 259 | −18 | 241 | −23 | −41 |
+
+**Stafford goes from QB1 to QB12, from +64 VOR to below replacement (−12).**
+QB10 replacement is 282. Yahoo has him 113th, ESPN 86th — after the correction,
+*the market and the model agree*, and the "edge" disappears entirely.
+
+### A second, separate bug: name joins
+
+Two players have a correction available that was never matched, because the two
+files disagree about name suffixes:
+
+| `players.json` | `td_luck.json` | Correction | EV now | EV after |
+|---|---|---|---|---|
+| James Cook **III** | James Cook | −11.3 | 208 | 197 |
+| Kenneth Walker | Kenneth Walker **III** | +19.6 | 179 | 199 |
+
+The fuzzy matcher built for the board reader (`sim/matcher_tests.js`) handles
+exactly this case; the data pipeline does not use it.
+
+### Confidence
+
+The direction is certain: Stafford is the largest positive TD outlier in the
+data and the model's own documented policy is to regress that hard. The
+magnitude is approximate — the reconstruction has errors up to ~30 points on
+QBs with heavy rushing (Lamar, Maye), though it matched Allen to 0.4. Plausible
+range **−50 to −95**. Even at the mild end he is no longer QB1 by a wide margin.
+
+**This has not been fixed.** Changing projections the night before a draft is
+exactly the class of edit that produced the README's bug list, and the decision
+is yours. But do not draft Stafford at 55 believing it is an edge.
+
+---
+
+## 0. The "6-point passing TD exploit" also does not exist
 
 This is the project's founding premise, and **the model's own data contradicts
 it.** The scoring settings are exactly as documented — that part was verified —
