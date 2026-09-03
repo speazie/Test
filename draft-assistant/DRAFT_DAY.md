@@ -3,6 +3,27 @@
 Everything you need to do, in order. Ten minutes of setup now; nothing to
 remember on the night.
 
+## Confirmed from the league settings page (league 1388434)
+
+| | |
+|---|---|
+| Draft type | **Live Standard Draft** (snake) — there *is* a live draft room |
+| Draft time | **Fri Sep 4, 9:30pm EDT** |
+| Pick clock | **1 minute** |
+| Teams | 10, head-to-head, your slot **6** |
+| Roster | QB, WR, WR, RB, RB, TE, W/R/T, K, DEF + 6 BN + 2 IR |
+| Playoffs | 4 teams, weeks 16–17, reseeded |
+| Waivers | Continual rolling, Tuesday, **no acquisition limit** |
+
+Scoring was checked line by line against the model: 6-pt passing TD (Yahoo
+default is 4), full PPR, −2 INT, **−1 per sack**, **−3 pick-six**, +2 for each
+40+ yard TD, −2 fumble lost. **Every one matches what the projections assume.**
+The edge is real and it is not a modelling artefact.
+
+A minute per pick is far more slack than "picks move in seconds" implied. Even
+with the bridge switched off entirely, tap entry finishes a pick in about a
+second. You are not going to be rushed.
+
 ---
 
 ## The one thing to do before draft day
@@ -115,9 +136,8 @@ trusting something I could not test.
   still committed, because an exact unique name is decisive; only the team note
   is stale.
 
-**One contradiction worth flagging:** the bundle's own prompt and README both
-describe league 1388434 as an **Offline Draft**, where the commissioner enters
-picks and there is no live draft room. You have since said it will be an online
-draft. Everything above is built for the online case. If it turns out to be
-offline after all, the bridge has nothing to read — and the tap/type entry path
-is then the whole tool, which is why it was built to stand alone.
+**Resolved:** the bundle's prompt and README both called this an *Offline
+Draft*. The league settings page says **Live Standard Draft, Fri Sep 4 9:30pm
+EDT**. The settings page wins — it is the system of record. The bridge is
+therefore the right build, and the screenshot/OCR path described in the old
+prompt is not needed and was not built.

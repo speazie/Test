@@ -1,6 +1,11 @@
 // Tunable weights. These were previously hardcoded from intuition; they are now
 // optimised against simulated championship rate (see optimise.js).
-var CFG = (typeof CFG_OVERRIDE!=='undefined') ? CFG_OVERRIDE : {"bye2": 14, "bye3": 26, "bye4": 70, "byeAll": 5, "byeNoCover": 7, "byeCover": 9, "reachFree": 8, "reachRate": 0.6, "cuffMult": 0.45, "cuffTop": 70, "cuff": 40, "conc": 10, "stack": 7, "dropMin": 10, "dropMult": 0.55, "dropCap": 30, "runCap": 22, "runRate": 45, "coldPen": 8, "scarMin": 6, "scarMax": 48, "benchWR": 12, "benchRB": 6, "rb5pen": 14};
+var CFG = (typeof CFG_OVERRIDE!=='undefined') ? CFG_OVERRIDE : {"bye2": 14, "bye3": 26, "bye4": 70, "byeAll": 5, "byeNoCover": 7, "byeCover": 9, "reachFree": 8, "reachRate": 0.6, "cuffMult": 0.45, "cuffTop": 70, "cuff": 40, "conc": 10, "stack": 7, "dropMin": 10, "dropMult": 0.55, "dropCap": 30, "runCap": 22, "runRate": 45, "coldPen": 8, "scarMin": 6, "scarMax": 48, "benchWR": 12, "benchRB": 6, "rb5pen": 14,
+  // Previously hardcoded OUTSIDE CFG, so sim/optimise.js never saw them and
+  // they were never tested. Defaults below are the exact prior values, so
+  // exposing them changes nothing until a value is deliberately moved.
+  "qbEarly": -30, "qbMid": -12, "kRound": 15, "dstRound": 14,
+  "flexTE": -8, "survThresh": 0.55, "lateHorizon": 38};
 ;
 const TEAMS=10, ROUNDS=15;
 const SLOTS=[["QB",["QB"]],["WR",["WR"]],["WR",["WR"]],["RB",["RB"]],["RB",["RB"]],
@@ -29,7 +34,7 @@ function fillRoster(){
   // projected points here — VOR would favour a TE purely because TEs are scarce.
   board.forEach(s=>{ if(!s.ok||s.ok.length===1) return;
     const elig=pool.filter(p=>!used.has(p.n)&&s.ok.includes(p.p))
-                   .sort((a,b)=>(b.e+(b.p==="TE"?-8:0))-(a.e+(a.p==="TE"?-8:0)));
+                   .sort((a,b)=>(b.e+(b.p==="TE"?CFG.flexTE:0))-(a.e+(a.p==="TE"?CFG.flexTE:0)));
     const hit=elig[0];
     if(hit){s.who=hit;used.add(hit.n);} });
   // bench
@@ -79,7 +84,7 @@ function expectedBest(pos,N,pc){
   let best=null;
   for(const q of PLAYERS){
     if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
-    if(survives(q,N,pc)>=0.55){ if(best===null||q.v>best) best=q.v; }
+    if(survives(q,N,pc)>=CFG.survThresh){ if(best===null||q.v>best) best=q.v; }
   }
   return best;
 }
@@ -112,7 +117,7 @@ function lateBest(pos,fromPick){
   let best=null;
   for(const q of PLAYERS){
     if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
-    if(boardRank(q) < fromPick+38) continue;      // near-certain to still be there
+    if(boardRank(q) < fromPick+CFG.lateHorizon) continue;  // near-certain to still be there
     if(best===null||q.v>best) best=q.v;
   }
   return best;
@@ -133,13 +138,13 @@ function needBonus(pos,rnd,p_ev_hint,P_,pick_){
   // slots, nothing else may be recommended.
   if(left<=total) return (fillsSlot||fillsFlex)?900:null;
   // kicker and defense are streamable; only in the last two rounds
-  if(pos==="K")   return rnd>=15?800:null;
-  if(pos==="DST") return rnd>=14?800:null;
+  if(pos==="K")   return rnd>=CFG.kRound?800:null;
+  if(pos==="DST") return rnd>=CFG.dstRound?800:null;
   // never a backup QB while real roster work remains
   if(pos==="QB"&&have>=1) return left<=2?-30:null;
   // Under 6-point passing TDs the QB1 is a genuine early-round asset; VOR now
   // carries the timing on its own, so only a mild late nudge remains.
-  if(pos==="QB") return (fillsSlot?scarcity(P_,pick_):0) + (rnd<=1?-30:rnd<=4?-12:0);
+  if(pos==="QB") return (fillsSlot?scarcity(P_,pick_):0) + (rnd<=1?CFG.qbEarly:rnd<=4?CFG.qbMid:0);
   if(pos==="TE"&&have===0) return scarcity(P_,pick_);
   if(fillsSlot) return scarcity(P_,pick_);
   if(fillsFlex){

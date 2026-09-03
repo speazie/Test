@@ -17,6 +17,13 @@ function build(cfg){
 const OMAX={QB:2,RB:6,WR:7,TE:2,K:1,DST:1}, OREQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1};
 function draft(cfg,slot){
   const A=build(cfg); A.setSlot(slot);
+  // Optional stress hook (sim/rookie_stress.js): discount a named set of
+  // players before drafting, to test how much the draft leans on them.
+  // VOR moves by the same absolute amount as EV, because the replacement
+  // baseline it is measured against does not change.
+  const hc=global.__ROOKIE_HAIRCUT;
+  if(hc&&hc.amount){ for(const p of A.PLAYERS){ if(hc.names.has(p.n)){
+    const drop=p.e*hc.amount; p.e-=drop; p.v-=drop; } } }
   const mySet=new Set(A.myPicks()); const rost={},cnt={};
   for(let t=1;t<=TEAMS;t++){rost[t]=[];cnt[t]={};}
   for(let pick=1;pick<=TEAMS*ROUNDS;pick++){
@@ -97,7 +104,7 @@ function evaluate(cfg,nDrafts,nSeasons,seed){
   }
   return {title:T/N, playoff:M/N};
 }
-module.exports={evaluate};
+module.exports={evaluate,draft,season,build,BASE_SEED:()=>SEED,setSeed:v=>{SEED=v}};
 if(require.main===module){
   const base={bye2:14,bye3:26,bye4:70,byeAll:5,byeNoCover:7,byeCover:9,
     reachFree:8,reachRate:1.7,cuffMult:0.45,cuffTop:70,cuff:40,conc:10,stack:7,
