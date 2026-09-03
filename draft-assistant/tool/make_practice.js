@@ -13,6 +13,7 @@
 //   node tool/make_practice.js <sha256-of-sources>
 const fs = require('fs');
 const path = require('path');
+const mountShim = require('./mount_wrapper.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const stamp = process.argv[2];
@@ -54,34 +55,8 @@ const [engineScoped, scoped] = namespaceKeys(engine, bridge);
 const script = `
 (function () {
   "use strict";
-  var HOST = document.createElement("div");
-  HOST.id = "sstlv-host";
-  HOST.style.cssText = [
-    "position:fixed", "top:0", "right:0", "width:400px", "max-width:96vw",
-    "height:100vh", "z-index:2147483645", "overflow:auto",
-    "box-shadow:-2px 0 18px rgba(0,0,0,.45)", "font-size:15px"
-  ].join(";");
-  var SHADOW = HOST.attachShadow({ mode: "open" });
-  SHADOW.innerHTML = "<style>" + ${JSON.stringify(css)} + "</style>" + ${JSON.stringify(body)};
-  document.documentElement.appendChild(HOST);
-  document.body.style.paddingRight = "410px";
+${mountShim({ css, body, padBody: true })}
 
-  var TAB = document.createElement("button");
-  TAB.textContent = "SSTLV";
-  TAB.style.cssText = [
-    "position:fixed", "top:8px", "right:8px", "z-index:2147483646",
-    "background:#F5C518", "color:#0D1015", "border:0", "border-radius:5px",
-    "font:700 11px ui-monospace,Menlo,Consolas,monospace", "letter-spacing:.09em",
-    "padding:7px 10px", "cursor:pointer"
-  ].join(";");
-  TAB.onclick = function () {
-    var hidden = HOST.style.display === "none";
-    HOST.style.display = hidden ? "" : "none";
-    document.body.style.paddingRight = hidden ? "410px" : "0";
-  };
-  document.documentElement.appendChild(TAB);
-
-  var UIROOT_OVERRIDE = SHADOW;
   const PLAYERS = ${players.trim()};
   var BUILD_STAMP = "sha256:${stamp}";
 

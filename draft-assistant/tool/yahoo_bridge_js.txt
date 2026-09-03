@@ -282,15 +282,26 @@ function loadBridge() {
 
 // ---- binding the region by clicking it ----
 let picking = false, hiBox = null;
+let reopenAfterPick = false;
 function startPick() {
   if (picking) return;
   picking = true;
-  BR.note = "Click the part of the page that lists the picks already made.";
+  BR.note = "Tap the part of the page that lists the picks already made.";
   renderBridgePanel();
+  // On a phone the panel is a full-screen overlay, so it is covering the very
+  // thing you are being asked to tap. Get out of the way, then come back.
+  reopenAfterPick = false;
+  if (typeof PANEL !== "undefined" && PANEL.narrow() && PANEL.isOpen()) {
+    reopenAfterPick = true;
+    PANEL.set(false);
+  }
   hiBox = document.createElement("div");
   hiBox.style.cssText = "position:fixed;z-index:2147483646;pointer-events:none;" +
     "border:2px solid #F5C518;background:rgba(245,197,24,.14);border-radius:4px";
   document.body.appendChild(hiBox);
+  // pointermove covers mouse, pen and touch-drag; mousemove alone gives a
+  // phone no highlight at all.
+  document.addEventListener("pointermove", onHover, true);
   document.addEventListener("mousemove", onHover, true);
   document.addEventListener("click", onPickClick, true);
   document.addEventListener("keydown", onPickKey, true);
@@ -298,9 +309,11 @@ function startPick() {
 function stopPick() {
   picking = false;
   if (hiBox) { hiBox.remove(); hiBox = null; }
+  document.removeEventListener("pointermove", onHover, true);
   document.removeEventListener("mousemove", onHover, true);
   document.removeEventListener("click", onPickClick, true);
   document.removeEventListener("keydown", onPickKey, true);
+  if (reopenAfterPick && typeof PANEL !== "undefined") { reopenAfterPick = false; PANEL.set(true); }
 }
 function onHover(e) {
   const el = e.target;

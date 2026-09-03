@@ -158,6 +158,23 @@ usable by hand and the two entry paths cost about a second each:
 **Undo** is on every row of the pick feed, and the footer UNDO reverses the last
 action.
 
+## On a phone
+
+It works, but the layout is different and the flow has one extra step:
+
+- The panel **starts closed** so you can see the board. Tap the yellow **SSTLV**
+  button (top-right) to open it full-screen; it becomes **CLOSE** to go back.
+- When you tap **BIND THE PICK LIST**, the panel gets out of your way
+  automatically — it is covering the very thing you need to tap — then comes
+  back once you have tapped the list.
+- Everything else is identical.
+
+**If you open `practice.html` on a phone and see nothing at all**, check how you
+opened it. iOS Files and some mail clients preview HTML in a viewer that does
+not run JavaScript, which shows a blank or inert page. Open it in **Safari or
+Chrome proper** (Files → share → open in browser), or just use a laptop — the
+practice page is only a rehearsal.
+
 ## Troubleshooting
 
 | Symptom | Fix |

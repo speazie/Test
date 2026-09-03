@@ -13,6 +13,7 @@ H.readFreshHtml();            // refuse to test a stale build
 
 const TOOL = 'file://' + path.join(H.ROOT, 'tool/live-draft-assistant.html');
 const ROOM = 'file://' + path.join(H.ROOT, 'sim/fixtures/mock_draft_room.html');
+const PRACTICE = 'file://' + path.join(H.ROOT, 'tool/practice.html');
 const USERSCRIPT = path.join(H.ROOT, 'tool/yahoo-draft-bridge.user.js');
 
 let pass = 0, fail = 0;
@@ -181,6 +182,60 @@ function ok(label, cond, detail) {
     ok('it says why', /available list/i.test(st.note || ''), 'note=' + st.note);
 
     await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nmobile — a phone must not get a 28-pixel slit');
+  // ======================================================================
+  {
+    const { devices } = require('playwright');
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+    const page = await ctx.newPage();
+    const errs = [];
+    page.on('pageerror', e => errs.push(String(e).slice(0, 120)));
+
+    // The standalone tool first: it is the offline fallback and may well be
+    // used on a phone.
+    await page.goto(TOOL);
+    await page.waitForFunction(() => !!document.getElementById('fast'));
+    ok('standalone tool fits the viewport',
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2),
+      'scrollWidth ' + await page.evaluate(() => document.documentElement.scrollWidth));
+
+    // Then the practice page, which mounts the panel the same way the
+    // userscript does on Yahoo.
+    await page.goto(PRACTICE);
+    await page.waitForFunction(() => !!window.__sstlv, null, { timeout: 10000 });
+    ok('draft room keeps full width (not squeezed by panel padding)',
+      await page.evaluate(() => document.querySelector('.cols').getBoundingClientRect().width > 300));
+    ok('panel starts closed on a phone',
+      await page.evaluate(() => document.getElementById('sstlv-host').style.display === 'none'));
+    const tab = page.locator('#sstlv-tab');
+    await tab.tap();
+    ok('tab opens it full-width',
+      await page.evaluate(() => {
+        const h = document.getElementById('sstlv-host');
+        return h.style.display !== 'none' && h.getBoundingClientRect().width > 350;
+      }));
+
+    // Binding by touch: the picker must step out of the way and come back.
+    await page.locator('#sstlv-host >> #slots button').nth(5).tap();
+    await tab.tap();
+    for (let i = 0; i < 4; i++) await page.locator('#pStep').tap();
+    await tab.tap();
+    await page.locator('#sstlv-host >> #brBind').tap();
+    await page.waitForTimeout(250);
+    ok('picker hides the panel so the board is tappable',
+      await page.evaluate(() => document.getElementById('sstlv-host').style.display === 'none'));
+    await page.locator('#pLog tr').nth(1).locator('td').nth(1).tap();
+    await page.waitForTimeout(350);
+    ok('panel returns after the bind tap',
+      await page.evaluate(() => document.getElementById('sstlv-host').style.display !== 'none'));
+    await page.locator('#sstlv-host >> #brImport').tap();
+    const mst = await page.evaluate(() => window.__sstlv.state());
+    ok('imports by touch', mst.gone + mst.mine.length === 4, 'got ' + (mst.gone + mst.mine.length));
+    ok('no page errors on mobile', errs.length === 0, errs.join(' | '));
+    await ctx.close();
   }
 
   await browser.close();
