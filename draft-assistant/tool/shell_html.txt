@@ -131,6 +131,65 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,16,21,.96);
 .gh{appearance:none;border:1px solid var(--line);background:none;color:var(--mute);
   font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;padding:8px 10px;border-radius:5px;cursor:pointer}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---- live board: bridge status, desync, fast entry, likely-next, feed ---- */
+.bridge{display:flex;align-items:center;gap:7px;margin-top:10px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:7px;background:var(--card2);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--mute)}
+.bridge .dot{width:8px;height:8px;border-radius:50%;background:#4E5A69;flex:none}
+.bridge.on{border-color:#2F6B43;background:rgba(74,222,128,.09);color:#8FE3AB}
+.bridge.on .dot{background:var(--rb);box-shadow:0 0 0 3px rgba(74,222,128,.18)}
+.bridge.off{border-color:#6B3535;background:rgba(244,63,94,.09);color:#F3A2AE}
+.bridge.off .dot{background:#F43F5E}
+.bridge b{color:var(--ink);font-weight:700}
+
+.desync{margin-top:10px;border:1px solid #8A3A16;background:rgba(251,140,66,.13);
+  border-radius:7px;padding:10px 11px;font-size:12.5px;color:#F6C9A6}
+.desync b{color:#FFE2C9}
+.desync .fix{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.desync button{appearance:none;border:1px solid #8A3A16;background:rgba(251,140,66,.18);
+  color:#FFE2C9;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.07em;
+  padding:7px 10px;border-radius:5px;cursor:pointer}
+
+.fastwrap{position:relative;margin-bottom:10px}
+input#fast{width:100%;appearance:none;background:var(--card2);border:1px solid var(--line);
+  color:var(--ink);border-radius:8px;padding:13px 12px;font-size:17px;font-family:inherit}
+input#fast:focus{outline:none;border-color:var(--hi);background:#141A22}
+.fhint{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:#5F6C7D;margin:6px 2px 0}
+.fres{margin-top:6px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+.fres:empty{display:none}
+.fr{display:flex;gap:8px;align-items:center;padding:9px 11px;border-bottom:1px solid var(--line);cursor:pointer}
+.fr:last-child{border-bottom:0}
+.fr.sel{background:rgba(245,197,24,.13)}
+.fr .fn{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr.sel .fn{font-weight:700}
+.fr .fk{font-family:var(--mono);font-size:9px;color:#5F6C7D;flex:none}
+.fr.taken{opacity:.42}
+.fr.taken .fn{text-decoration:line-through}
+
+.lk{display:flex;flex-wrap:wrap;gap:5px}
+.lkb{appearance:none;text-align:left;border:1px solid var(--line);background:var(--card2);
+  color:var(--ink);border-radius:6px;padding:7px 9px;cursor:pointer;font-family:inherit;
+  font-size:12.5px;line-height:1.25;flex:1 1 calc(50% - 3px);min-width:0}
+.lkb:active{background:var(--hi);color:#0D1015}
+.lkb .lm{display:block;font-family:var(--mono);font-size:8.5px;color:var(--mute);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lkb .lr{font-family:var(--mono);font-size:9px;color:#5F6C7D;float:right;margin-left:6px}
+
+.feed{border:1px solid var(--line);border-radius:8px;background:var(--card2);overflow:hidden}
+.feed:empty{display:none}
+.fdrow{display:flex;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:10.5px;color:var(--mute)}
+.fdrow:last-child{border-bottom:0}
+.fdrow .fdn{flex:1;min-width:0;color:var(--ink);font-family:inherit;font-size:12.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fdrow .fdp{color:#5F6C7D}
+.fdrow.auto .fdp{color:var(--rb)}
+.fdrow.low{background:rgba(251,140,66,.10)}
+.fdrow button{appearance:none;border:1px solid var(--line);background:none;color:var(--mute);
+  font-family:var(--mono);font-size:9px;padding:4px 7px;border-radius:4px;cursor:pointer;flex:none}
+.stealth .why,.stealth .rtot,.stealth #recList .meta{visibility:hidden}
 </style>
 </head>
 <body>
@@ -149,6 +208,20 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,16,21,.96);
     <div class="stat"><div class="k">Roster</div><div class="v" id="cnt">0<span style="font-size:12px;color:var(--mute)">/17</span></div></div>
   </div>
   <p class="away" id="away"></p>
+  <div class="bridge" id="bridge"><span class="dot"></span><span id="bridgeTxt">Board bridge not connected — manual entry</span></div>
+  <div id="desync"></div>
+</section>
+
+<section style="padding-top:0">
+  <p class="lbl">Mark a pick — type any part of the name, Enter marks him gone</p>
+  <div class="fastwrap">
+    <input type="search" id="fast" placeholder="stfd · jsn · ja ch…"
+           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <div class="fres" id="fastRes"></div>
+    <p class="fhint" id="fastHint">Enter = drafted by someone else &nbsp;·&nbsp; Shift+Enter = I took him &nbsp;·&nbsp; ↑↓ to choose</p>
+  </div>
+  <p class="lbl">Going next — one tap to mark gone</p>
+  <div class="lk" id="likely"></div>
 </section>
 
 <section style="padding-top:0">
@@ -164,6 +237,11 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,16,21,.96);
   <div class="roster" id="roster"></div>
   <div class="rtot" id="rtot"></div>
   <div id="warns"></div>
+</section>
+
+<section style="padding-top:0">
+  <p class="lbl">Picks read from the board — tap UNDO on any that is wrong</p>
+  <div class="feed" id="feed"></div>
 </section>
 
 <section style="padding-top:0">
@@ -184,6 +262,7 @@ footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,16,21,.96);
 <footer><div class="fbar">
   <div class="now" id="fnow"></div>
   <button class="gh mockb" id="mock">MOCK</button>
+  <button class="gh" id="stealth" title="hide the model's reasoning from anyone watching">HIDE</button>
   <button class="gh" id="undo">UNDO</button>
   <button class="gh" id="reset">RESET</button>
 </div></footer>

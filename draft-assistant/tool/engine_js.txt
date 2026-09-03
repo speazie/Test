@@ -371,12 +371,186 @@ function runMock(){
     have[best.p]=(have[best.p]||0)+1;
   }
   mocked=true; sortMode="pick"; render();
-  window.scrollTo({top:document.getElementById("roster").offsetTop-120,behavior:"smooth"});
+  try{ const r=$("roster"); if(r&&r.scrollIntoView) r.scrollIntoView({block:"center",behavior:"smooth"}); }catch(e){}
 }
 let mocked=false;
 
+// ============================================================================
+// NAME MATCHING
+// Two callers, one matcher:
+//   - the search box, where you type "stfd" and press Enter;
+//   - the Yahoo bridge, which reads a name off the draft board and must decide
+//     whether it is confident enough to commit it without asking.
+// Both need the same normalisation, so both use these functions. The bridge
+// additionally requires a confidence score, because "Robinson" alone is three
+// different players and committing the wrong one silently corrupts the board.
+// ============================================================================
+const SUFFIX=/\b(?:jr|sr|ii|iii|iv)\b/g;
+function norm(s){
+  return String(s==null?"":s).toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")   // strip accents
+    .replace(/[^a-z0-9]+/g," ")                       // ' . - all become spaces
+    .replace(SUFFIX," ")                              // Jr / Sr / III
+    .replace(/\s+/g," ").trim();
+}
+// Precomputed once. 237 players; every keystroke scores all of them.
+const NIDX=PLAYERS.map(p=>{
+  const tok=norm(p.n).split(" ").filter(Boolean);
+  return {p, tok, flat:tok.join(""), last:tok[tok.length-1]||"",
+          first:tok[0]||"", init:tok.map(t=>t[0]).join(""), team:norm(p.t)};
+});
+const NIDX_BY_NAME=Object.fromEntries(NIDX.map(x=>[x.p.n,x]));
+
+// Is q a subsequence of s, and how tight a one? 0 = no match, higher = better.
+function subseq(q,s){
+  let i=0,first=-1,prev=-2,gaps=0;
+  for(let k=0;k<s.length&&i<q.length;k++){
+    if(s.charCodeAt(k)===q.charCodeAt(i)){
+      if(first<0)first=k;
+      if(k!==prev+1)gaps++;
+      prev=k;i++;
+    }
+  }
+  if(i<q.length) return 0;
+  const span=prev-first+1;
+  return 1/(1+(span-q.length)*0.6+first*0.35+Math.max(0,gaps-1)*0.4);
+}
+// Every query token must prefix a distinct name token, left to right.
+// "matt staf" -> Matthew Stafford; "ja ch" -> Ja'Marr Chase.
+function tokenPrefix(qt,nt){
+  let ni=0,tight=0;
+  for(const q of qt){
+    let hit=-1;
+    for(let k=ni;k<nt.length;k++) if(nt[k].startsWith(q)){hit=k;break;}
+    if(hit<0) return 0;
+    tight+=q.length/nt[hit].length;
+    ni=hit+1;
+  }
+  return tight/qt.length;
+}
+// Score one player against a raw query string. Additive-free: this is a plain
+// max over strategies, so a strong exact match can never be diluted by a weak
+// fuzzy one.
+function nameScore(q,x){
+  const qn=norm(q); if(!qn) return 0;
+  const qt=qn.split(" ").filter(Boolean);
+  // Spaces in the query must not have to line up with spaces in the name:
+  // "aj brown" and "ajbrown" both have to reach "A.J. Brown" (-> "a j brown").
+  const qflat=qt.join("");
+  const idx=x.tok?x:NIDX_BY_NAME[x.n||x];
+  if(!idx) return 0;
+  let s=0;
+  const bump=v=>{ if(v>s) s=v; };
+  if(qflat===idx.flat||qn===idx.tok.join(" ")) bump(1000);
+  if(qt.length>1){ const t=tokenPrefix(qt,idx.tok); if(t) bump(780+60*t); }
+  if(idx.init===qn&&qn.length>=2) bump(760);                 // "jsn"
+  if(idx.last===qn) bump(700);
+  if(idx.last.startsWith(qn)) bump(600+40*(qn.length/idx.last.length));
+  if(idx.first.startsWith(qn)) bump(520+40*(qn.length/idx.first.length));
+  if(idx.init.startsWith(qn)&&qn.length>=2) bump(450);
+  if(idx.team===qn) bump(430);                               // "sea" -> Seattle
+  const sl=subseq(qflat,idx.last); if(sl) bump(300+120*sl);   // "stfd"
+  const sf=subseq(qflat,idx.flat); if(sf) bump(200+120*sf);
+  return s;
+}
+// Ranked search over the pool. Gone/mine players are included but flagged, so
+// you can see that a name you typed is already off the board.
+function searchPlayers(q,opts){
+  const o=opts||{}, lim=o.limit||8;
+  if(!norm(q)) return [];
+  const out=[];
+  for(const idx of NIDX){
+    const isGone=gone.has(idx.p.n), isMine=mine.includes(idx.p.n);
+    if(o.available&&(isGone||isMine)) continue;
+    const s=nameScore(q,idx);
+    if(s>0) out.push({p:idx.p,s,gone:isGone,mine:isMine});
+  }
+  // VOR breaks ties: two equally-good string matches, the better player first.
+  out.sort((a,b)=>b.s-a.s||b.p.v-a.p.v);
+  return out.slice(0,lim);
+}
+
+// Match a name read off the Yahoo board. Returns a confidence in 0..1.
+// A raw board cell is usually noisier than a typed query — "M. Stafford LAR - QB"
+// — so the position/team hints are used as corroboration, never as the match.
+function matchBoardName(raw,hint){
+  const h=hint||{};
+  const cand=searchPlayers(raw,{limit:8});
+  if(!cand.length) return {p:null,conf:0,why:"no candidate"};
+  const best=cand[0].s;
+  // Everything within a hair of the best string score is genuinely ambiguous on
+  // the name alone — "Robinson" is three players. The team and position printed
+  // in the same board cell must therefore CHOOSE among them, not merely score
+  // the choice after the fact. Corroboration is confined to this tied group so
+  // it can never promote a worse string match over a better one.
+  const tied=cand.filter(c=>best-c.s<=60);
+  const corr=c=>{
+    let k=0;
+    if(h.pos){ k+= c.p.p===h.pos?2:-3; }
+    if(h.team&&norm(h.team).length>1){ k+= norm(h.team)===norm(c.p.t)?2:-3; }
+    return k;
+  };
+  tied.sort((a,b)=>corr(b)-corr(a)||b.s-a.s||b.p.v-a.p.v);
+  const top=tied[0], runner=tied[1];
+  const sep=runner?corr(top)-corr(runner):99;   // did the hints actually separate them?
+
+  let conf;
+  if(top.s>=1000) conf=1;            // exact full name
+  else if(top.s>=760) conf=0.92;     // initials, or every token prefixed
+  else if(top.s>=600) conf=0.75;     // surname only
+  else if(top.s>=430) conf=0.55;
+  else conf=0.35;
+  // Ambiguous on the name and NOT separated by the hints: this is the case that
+  // silently corrupts the board, so it must never clear the auto-commit bar.
+  if(tied.length>1&&sep<=0) conf=Math.min(conf,0.5);
+  if(h.pos) conf = top.p.p===h.pos ? Math.min(1,conf+0.12) : Math.min(conf,0.4);
+  if(h.team&&norm(h.team).length>1)
+    conf = norm(h.team)===norm(top.p.t) ? Math.min(1,conf+0.12) : Math.min(conf,0.45);
+  if(top.gone||top.mine) return {p:top.p,conf,why:"already off the board",dup:true};
+  return {p:top.p,conf,why:"matched",alts:tied.slice(1,4).map(c=>c.p)};
+}
+// A board read is committed without asking only above this bar. Everything
+// below it goes to the confirm strip instead.
+const AUTO_COMMIT=0.85;
+
+// ---- the "likely next" board ----
+// Sorted by the OPPONENT's board, not ours: these are the players about to be
+// taken, so this is the list a pick almost always comes from. One tap each.
+function likelyNext(k){
+  return PLAYERS
+    .filter(p=>!gone.has(p.n)&&!mine.includes(p.n)&&p.v>-90)
+    .sort((a,b)=>boardRank(a)-boardRank(b))
+    .slice(0,k||20);
+}
+
+// ---- board ingest & desync ----
+// The bridge calls this for every pick it reads. `src` records where a pick
+// came from so the feed can show it and so a bad auto-detect is one tap to undo.
+let feed=[];                 // newest last: {n, pick, src, conf, mine}
+let boardPick=null;          // pick number Yahoo says we are on, if readable
+let bridgeSeen=0;            // timestamp of the last successful board read
+
+function ingestPick(name,opt){
+  const o=opt||{};
+  const p=byName[name]; if(!p) return {ok:false,why:"unknown player"};
+  if(gone.has(name)||mine.includes(name)) return {ok:false,why:"already off the board"};
+  const rec={n:name,pick:o.pick||curPick(),src:o.src||"board",conf:o.conf==null?1:o.conf,mine:!!o.mine};
+  if(o.mine) takeIt(name); else markGone(name);
+  feed.push(rec); if(feed.length>200) feed.shift();
+  return {ok:true,rec};
+}
+function setBoardPick(n){ if(typeof n==="number"&&n>0){ boardPick=n; bridgeSeen=Date.now(); } }
+// Positive => the board is ahead of us (we missed picks). Negative => we hold
+// picks the board does not show.
+function desync(){ return boardPick==null?null:boardPick-curPick(); }
+
 // ---- render ----
-const $=id=>document.getElementById(id);
+// The same engine renders into two hosts: the standalone page (document) and a
+// shadow root injected into the Yahoo draft room by the bridge userscript.
+// ShadowRoot implements getElementById, so one accessor covers both and the
+// bridge's CSS cannot be reached by Yahoo's stylesheet or vice versa.
+var UIROOT = (typeof UIROOT_OVERRIDE!=='undefined') ? UIROOT_OVERRIDE : document;
+const $=id=>UIROOT.getElementById(id);
 function render(){
   // slots
   $("slots").innerHTML="";
@@ -449,14 +623,14 @@ function render(){
    const st=R.slice(0,9).filter(x=>x.who), bn=R.slice(9).filter(x=>x.who);
    const sv=st.reduce((a,x)=>a+x.who.v,0), se=R.slice(0,7).filter(x=>x.who).reduce((a,x)=>a+x.who.e,0);
    const bv=bn.reduce((a,x)=>a+x.who.v,0);
-   const el=document.getElementById("rtot");
+   const el=$("rtot");
    el.innerHTML = st.length
      ? '<span class="tk">STARTERS</span> '+Math.round(se)+' pts · '+Math.round(sv)+' VOR'+
        '<span class="tk" style="margin-left:12px">BENCH</span> '+Math.round(bv)+' VOR'
      : '';}
   const sf=shortfall(); const missing=Object.entries(sf.s).filter(([k,v])=>v>0)
       .map(([k,v])=>v>1?k+"\u00d7"+v:k);
-  const stillEl=document.getElementById("still");
+  const stillEl=$("still");
   stillEl.innerHTML = missing.length
     ? '<span class="needk">STILL NEED</span> '+missing.join(", ")+
       ' <span class="needk">'+picksLeft()+' PICKS LEFT</span>'
@@ -513,20 +687,194 @@ function render(){
     mb.onclick=()=>isM?unTake(p.n):takeIt(p.n);
     box.append(gx,mb); d.appendChild(box); $("list").appendChild(d);
   });
+  renderFast();
+  renderLikely();
+  renderFeed();
+  renderBridge();
   save();
 }
 
+// ---- fast entry ----
+// The whole point: no full names typed. `fastQ` is whatever is in the box,
+// `fastSel` is the highlighted row. Enter commits the highlighted row as GONE
+// (the common case — someone else drafted him); Shift+Enter commits as MINE.
+let fastQ="", fastSel=0, fastHits=[];
+function fastCommit(mineFlag){
+  const hit=fastHits[fastSel];
+  if(!hit||hit.gone||hit.mine) return;
+  ingestPick(hit.p.n,{src:"typed",mine:!!mineFlag,conf:1});
+  fastQ=""; fastSel=0;
+  const box=$("fast"); if(box) box.value="";
+  render();
+}
+function renderFast(){
+  const box=$("fastRes"); if(!box) return;
+  fastHits=searchPlayers(fastQ,{limit:6});
+  if(fastSel>=fastHits.length) fastSel=0;
+  box.innerHTML="";
+  fastHits.forEach((h,i)=>{
+    const d=document.createElement("div");
+    const off=h.gone||h.mine;
+    d.className="fr"+(i===fastSel?" sel":"")+(off?" taken":"");
+    d.innerHTML='<div class="fn">'+h.p.n+' <span class="pos '+h.p.p+'">'+h.p.p+'</span></div>'+
+      '<div class="fk">'+h.p.t+' · VOR '+Math.round(h.p.v)+' · ADP '+Math.round(h.p.a)+
+      (h.mine?' · YOURS':h.gone?' · GONE':'')+'</div>';
+    d.onclick=()=>{ fastSel=i; fastCommit(false); };
+    box.appendChild(d);
+  });
+}
+
+// ---- likely-next panel ----
+// Sorted by the OPPONENTS' board, so in practice the next pick is nearly always
+// on this list. One tap marks him gone: no typing at all.
+function renderLikely(){
+  const box=$("likely"); if(!box) return;
+  box.innerHTML="";
+  likelyNext(20).forEach(p=>{
+    const b=document.createElement("button");
+    b.className="lkb";
+    b.innerHTML='<span class="lr">'+Math.round(boardRank(p))+'</span>'+p.n+
+      '<span class="lm"><span class="pos '+p.p+'">'+p.p+'</span> '+p.t+
+      ' · VOR '+Math.round(p.v)+'</span>';
+    b.title="mark "+p.n+" as drafted by someone else";
+    b.onclick=()=>{ ingestPick(p.n,{src:"tap",conf:1}); render(); };
+    box.appendChild(b);
+  });
+}
+
+// ---- pick feed ----
+function renderFeed(){
+  const box=$("feed"); if(!box) return;
+  box.innerHTML="";
+  feed.slice(-12).reverse().forEach(rec=>{
+    const d=document.createElement("div");
+    d.className="fdrow"+(rec.src==="board"?" auto":"")+(rec.conf<0.85?" low":"");
+    d.innerHTML='<span class="fdp">#'+rec.pick+'</span>'+
+      '<span class="fdn">'+rec.n+(rec.mine?' <span class="pknum me">YOURS</span>':'')+'</span>'+
+      '<span class="fdp">'+(rec.src==="board"?"auto":rec.src)+
+      (rec.conf<0.85?" "+Math.round(rec.conf*100)+"%":"")+'</span>';
+    const u=document.createElement("button");
+    u.textContent="UNDO";
+    u.onclick=()=>{ undoPick(rec.n); render(); };
+    d.appendChild(u);
+    box.appendChild(d);
+  });
+}
+// Remove one specific pick wherever it came from. The generic UNDO button pops
+// the last action; this un-does the row you are looking at, which is what you
+// want when the bridge misread pick 31 and you are now on pick 34.
+function undoPick(n){
+  gone.delete(n); delete goneAt[n];
+  mine=mine.filter(x=>x!==n); delete takenAt[n];
+  hist=hist.filter(h=>h[1]!==n);
+  feed=feed.filter(f=>f.n!==n);
+}
+
+// ---- bridge status + desync ----
+function renderBridge(){
+  const el=$("bridge"), txt=$("bridgeTxt");
+  if(el&&txt){
+    const age=bridgeSeen?(Date.now()-bridgeSeen)/1000:null;
+    const live=age!==null&&age<25;
+    el.className="bridge"+(live?" on":(bridgeSeen?" off":""));
+    txt.innerHTML = !bridgeSeen
+      ? "Board bridge not connected — tap entry below"
+      : live ? "Reading the Yahoo board — <b>"+feed.filter(f=>f.src==="board").length+"</b> picks auto-entered"
+             : "Bridge went quiet "+Math.round(age)+"s ago — <b>use tap entry</b>";
+  }
+  const dv=$("desync"); if(!dv) return;
+  const d=desync();
+  if(d===null||d===0){ dv.innerHTML=""; return; }
+  dv.innerHTML='<div class="desync"><b>Board disagrees with the tool.</b> '+
+    'Yahoo is on pick <b>'+boardPick+'</b>; the tool has counted <b>'+curPick()+'</b>'+
+    ' ('+(d>0?d+" pick"+(d>1?"s":"")+" missing":Math.abs(d)+" too many")+').'+
+    ' Turn detection is wrong until this is fixed.'+
+    '<div class="fix"><button id="dsAccept">TRUST THE BOARD</button>'+
+    '<button id="dsClear">DISMISS</button></div></div>';
+  const a=$("dsAccept"), c=$("dsClear");
+  // "Trust the board" is a padding fix, not a guess at WHO went: it inserts
+  // anonymous placeholders so the pick counter and turn detection line up again.
+  // Better a correct pick number with unknown names than a wrong pick number.
+  if(a) a.onclick=()=>{ reconcile(); render(); };
+  if(c) c.onclick=()=>{ boardPick=null; render(); };
+}
+let phantom=0;
+function reconcile(){
+  const d=desync(); if(d===null) return;
+  if(d>0){
+    for(let i=0;i<d;i++){
+      const nm="(unknown pick "+(++phantom)+")";
+      if(!byName[nm]){
+        PLAYERS.push({n:nm,p:"RB",t:"--",b:0,a:400,e:0,v:-95,s:0,src:"E",r:0,espn:400,
+          d:"Placeholder for a pick the tool missed."});
+        byName[nm]=PLAYERS[PLAYERS.length-1];
+        NIDX.push({p:byName[nm],tok:[],flat:"",last:"",first:"",init:"",team:"--"});
+      }
+      goneAt[nm]=curPick(); hist.push(["g",nm]); gone.add(nm);
+      feed.push({n:nm,pick:goneAt[nm],src:"fixup",conf:1,mine:false});
+    }
+  }
+  boardPick=null;
+}
+
 // ---- persistence ----
-async function save(){ try{ await window.storage.set("sstlv-live",
-  JSON.stringify({slot,gone:[...gone],mine,takenAt,goneAt,sortMode})); }catch(e){} }
-async function load(){ try{
-  const r=await window.storage.get("sstlv-live");
-  if(r&&r.value){const d=JSON.parse(r.value);
-    slot=d.slot||null; gone=new Set(d.gone||[]); mine=d.mine||[]; takenAt=d.takenAt||{}; goneAt=d.goneAt||{}; sortMode=d.sortMode||"value";}
-  }catch(e){} render(); }
+// This used to call window.storage, which is not a browser API. Opened as a
+// local file the call threw, the throw was swallowed by the catch, and NOTHING
+// WAS EVER SAVED — one accidental refresh mid-draft and the board was gone.
+// localStorage is synchronous, needs no server, and survives a reload, which is
+// exactly the offline guarantee the tool is supposed to have.
+const LSKEY="sstlv-live-v2";
+function store(){
+  try{ if(typeof localStorage!=="undefined"&&localStorage) return localStorage; }catch(e){}
+  return null;   // private mode / file:// restrictions in some browsers
+}
+let saveWarned=false;
+function save(){
+  const st=store();
+  if(!st){ if(!saveWarned){ saveWarned=true; console.warn("no localStorage: state will not survive a reload"); } return; }
+  try{
+    st.setItem(LSKEY,JSON.stringify({slot,gone:[...gone],mine,takenAt,goneAt,sortMode,feed,boardPick,v:2}));
+  }catch(e){ if(!saveWarned){ saveWarned=true; console.warn("save failed:",e); } }
+}
+function load(){
+  const st=store();
+  try{
+    const raw=st&&st.getItem(LSKEY);
+    if(raw){
+      const d=JSON.parse(raw);
+      slot=d.slot||null; gone=new Set(d.gone||[]); mine=d.mine||[];
+      takenAt=d.takenAt||{}; goneAt=d.goneAt||{}; sortMode=d.sortMode||"value";
+      feed=Array.isArray(d.feed)?d.feed:[]; boardPick=d.boardPick==null?null:d.boardPick;
+    }
+  }catch(e){ console.warn("could not restore saved draft:",e); }
+  render();
+}
+function storageWorks(){ return !!store(); }
 
 $("q").addEventListener("input",e=>{query=e.target.value;render();});
+// Fast entry. Kept out of render() so typing never rebuilds the whole page.
+{
+  const fb=$("fast");
+  if(fb){
+    fb.addEventListener("input",e=>{ fastQ=e.target.value; fastSel=0; renderFast(); });
+    fb.addEventListener("keydown",e=>{
+      if(e.key==="ArrowDown"){ e.preventDefault(); fastSel=Math.min(fastSel+1,fastHits.length-1); renderFast(); }
+      else if(e.key==="ArrowUp"){ e.preventDefault(); fastSel=Math.max(fastSel-1,0); renderFast(); }
+      else if(e.key==="Enter"){ e.preventDefault(); fastCommit(e.shiftKey); }
+      else if(e.key==="Escape"){ fastQ=""; e.target.value=""; renderFast(); }
+    });
+  }
+}
 $("mock").onclick=runMock;
+{
+  const sb=$("stealth");
+  if(sb) sb.onclick=()=>{
+    const host=UIROOT===document?document.body:UIROOT.querySelector(".wrap");
+    if(!host) return;
+    const on=host.classList.toggle("stealth");
+    sb.textContent=on?"SHOW":"HIDE";
+  };
+}
 $("addBtn").onclick=()=>{
   const nm=$("addName").value.trim(), ps=$("addPos").value;
   if(!nm) return;
