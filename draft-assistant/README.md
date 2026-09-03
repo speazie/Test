@@ -237,6 +237,59 @@ which is a change worth noting:
     one refresh mid-draft lost the entire board. Now `localStorage`, and the
     no-storage case is surfaced instead of hidden.
 
+## 6b. Scrutiny of the model against the real rules
+
+The league settings page was read line by line against the projections. **Every
+scoring assumption holds**: 6-point passing TDs against a Yahoo default of 4,
+full PPR, −2 interception, −1 per sack, −3 pick-six, +2 per 40+ yard TD, −2
+fumble lost, and a roster of QB/WR/WR/RB/RB/TE/W-R-T/K/DEF + 6 BN + 2 IR that
+matches `SLOTS` exactly. The quarterback edge is real.
+
+Two documentation errors were found and corrected: the draft is a **Live
+Standard Draft** (Fri Sep 4, 9:30pm EDT, 1-minute clock), not the Offline Draft
+the prompt and this README both claimed; and Stafford is **64 VOR at ADP 77**,
+not the 78 VOR quoted in section 1.
+
+### Where the model actually disagrees with the market
+
+Measuring median (opponent board rank − our VOR rank) by projection method:
+
+| Method | n | Median rank disagreement |
+|---|---|---|
+| `blend` (consensus + model) | 40 | −2 |
+| `model` (model alone) | 111 | −3 |
+| `rookie-empirical` | 8 | **+50** |
+| `adp` (returning from lost seasons) | 4 | **+38** |
+
+Model-only players are *not* systematically hot — that was the obvious worry
+and the data rejects it. The disagreement is concentrated almost entirely in
+**rookies**, which section 5 already names as the weakest component. Rookies are
+assigned a draft-capital **bin mean**, so five different receivers carry
+byte-identical EVs (183, 183, 169, 169, 169), yet those bins put Jadarian Price
+at our #16 overall against a field rank of #62.
+
+`sim/rookie_stress.js` exists to price that risk as a decision rather than an
+opinion: it crosses *what we believe when drafting* against *how wrong the
+rookie numbers actually are*, and reports the regret in each corner. Asking a
+self-referential simulation whether our own numbers are right is meaningless;
+asking which choice loses least when they are wrong is not.
+
+### Tuning method
+
+`sim/tune.js` replaces independent-sample comparison with a **paired** one:
+candidate and baseline run on the same seeds, so identical opponent behaviour
+and season shocks cancel and the per-seed difference isolates the config. This
+takes the noise band from roughly ±5 title points to under ±1.
+
+It also exploits a fact the original harness missed — **seasons are nearly free,
+drafts are what cost** (40 seasons per draft costs the same as 4). Sample sizes
+are therefore far larger than the original 288 seasons for the same runtime.
+
+Seven constants lived *outside* `CFG` and so had never been measured at all:
+`qbEarly`, `qbMid`, `kRound`, `dstRound`, `flexTE`, `survThresh`, `lateHorizon`.
+They are now `CFG` entries at their exact prior values, which the unchanged
+engine fingerprint proves is inert.
+
 ## 7. Verification
 
 `./verify.sh` runs, in fail-fast order:

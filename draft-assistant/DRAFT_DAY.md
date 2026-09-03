@@ -41,14 +41,33 @@ Ten minutes in a mock draft converts that from an assumption into a fact.
 
 ---
 
-## Setup (once)
+## Setup — do this tonight, not at 9:25pm tomorrow
 
-1. Install **Tampermonkey** (Chrome, Edge, Firefox, or Safari).
-2. Open `tool/yahoo-draft-bridge.user.js` and install it. In Tampermonkey:
-   *Dashboard → Utilities → Import from file*, or drag the file onto the
-   dashboard.
-3. Open `tool/live-draft-assistant.html` in a second tab and leave it there.
-   That is the offline fallback and it needs no network at all.
+**1. Install Tampermonkey.** Chrome/Edge/Firefox from the extension store;
+Safari from the App Store. Free.
+
+**2. Install the userscript.** Tampermonkey → *Dashboard* → *Utilities* tab →
+*Import from file* → choose `yahoo-draft-bridge.user.js` → *Install*. It should
+then be listed as enabled. (Dragging the file onto the dashboard also works.)
+
+**3. Confirm it loads.** Open any page on `football.fantasysports.yahoo.com`. A
+yellow **SSTLV** button must appear in the top-right corner. If it does not,
+nothing else in this document will work — check that Tampermonkey is enabled
+for the site and that the script shows a green/enabled toggle.
+
+**4. Save the fallback.** Put `live-draft-assistant.html` somewhere you can find
+it in one click — Desktop is fine — and open it once to confirm it loads. It
+needs no network at all. Bookmark the tab.
+
+**5. Dry-run in a mock draft** (the step people skip; do not skip it). Go to
+`football.fantasysports.yahoo.com/f1/mock_lobby`, join any 10-team mock, and run
+the five steps under *On the night* against it. You are checking one thing:
+**do picks appear in the panel by themselves?** If they do, you are done and the
+real draft needs no thought. If they do not, you have found it a day early
+instead of at pick 3, and the tap/type path still works — see *Troubleshooting*.
+
+**6. Set your slot to 6 before the draft starts** and leave the tab open. The
+board persists across a reload, so nothing is lost if the page refreshes.
 
 ## On the night
 
@@ -85,6 +104,21 @@ usable by hand and the two entry paths cost about a second each:
 
 **Undo** is on every row of the pick feed, and the footer UNDO reverses the last
 action.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| No yellow SSTLV button | Tampermonkey disabled, or the script is off. Check the dashboard toggle. Reload the page. |
+| Panel appears, but BIND finds nothing | You clicked a heading or empty space. Click directly on a row that has a player's name in it. |
+| It bound the wrong list (marks everyone gone) | **PAUSE**, then **REBIND REGION** onto the pick log. Undo the bad rows in the feed, or **RESET** and re-import. |
+| Picks stop arriving | Red dot appears after 25s. Hit **RESCAN**. If still dead, just use tap entry — you lose nothing but the automation. |
+| Panel covers the draft board | Click the yellow SSTLV tab to collapse it. |
+| Someone is watching your screen | **HIDE** blanks the reasoning. |
+
+If everything fails, the standalone HTML in your other tab is a complete,
+working draft assistant. Tap the player in *Going next*, or type three letters.
+At one minute a pick you have ample time.
 
 ## If the counter goes wrong
 
