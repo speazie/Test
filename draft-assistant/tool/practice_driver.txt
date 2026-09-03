@@ -1,0 +1,132 @@
+// ============================================================================
+// PRACTICE DRAFT DRIVER
+//
+// Drives the fake draft room so the whole flow can be rehearsed with nothing
+// installed. Runs INSIDE the same closure as the engine and the bridge, so it
+// has PLAYERS; it deliberately does not touch any engine state. Everything the
+// assistant learns, it learns by READING THE ROOM, exactly as it will read
+// Yahoo. That is the point — if this rehearsal works, the mechanism works.
+// ============================================================================
+(function practice() {
+  var TEAMS = 10, ROUNDS = 15, MY_SLOT = 6;
+  var log = document.getElementById("pLog");
+  var avail = document.getElementById("pAvail");
+  var clock = document.getElementById("pClock");
+  var turnBox = document.getElementById("pTurn");
+  if (!log || !avail) return;
+
+  var pool, taken, timer = null, paused = true;
+
+  function mySlotPicks() {
+    var a = [];
+    for (var r = 1; r <= ROUNDS; r++) a.push(r % 2 ? (r - 1) * TEAMS + MY_SLOT : r * TEAMS - MY_SLOT + 1);
+    return a;
+  }
+  var MINE = mySlotPicks();
+  var pickNo = 1;
+
+  function board(p) { return p.espn || p.a; }
+  function reset() {
+    stop();
+    pickNo = 1;
+    taken = {};
+    pool = PLAYERS.filter(function (p) { return p.v > -90; })
+                  .slice().sort(function (a, b) { return board(a) - board(b); });
+    log.innerHTML = "";
+    render();
+  }
+
+  function render() {
+    // Available list: top 40 by the opponents' board, the same shape a draft
+    // room shows. It is deliberately full of pool players -- if the assistant
+    // ever binds THIS list instead of the log, you will see it here first.
+    avail.innerHTML = "";
+    // Show a deep list, not a token few: the assistant will sometimes recommend
+    // a player the field rates 60th or lower -- that IS the edge -- and he has
+    // to be reachable, exactly as he would be in a real draft room's search.
+    var q = (document.getElementById("pSearch") || {}).value || "";
+    q = q.toLowerCase().trim();
+    var shown = pool.filter(function (p) {
+      return !q || p.n.toLowerCase().indexOf(q) >= 0 || p.t.toLowerCase().indexOf(q) >= 0;
+    });
+    shown.slice(0, 150).forEach(function (p) {
+      var li = document.createElement("li");
+      li.innerHTML = p.n + ' <span class="meta">' + p.t + " - " + p.p +
+        " · bye " + p.b + " · ADP " + Math.round(p.a) + "</span>";
+      li.onclick = function () { if (isMyPick()) commit(p, true); };
+      avail.appendChild(li);
+    });
+    var rnd = Math.ceil(pickNo / TEAMS);
+    clock.textContent = "pick " + pickNo + " · round " + Math.min(ROUNDS, rnd);
+    clock.className = "clock" + (isMyPick() ? " onclock" : "");
+    turnBox.innerHTML = isMyPick()
+      ? '<div class="yourturn"><b>YOUR PICK (' + pickNo + ').</b> ' +
+        'Check the assistant panel, then click your man in the Available list.</div>'
+      : "";
+  }
+
+  function isMyPick() { return MINE.indexOf(pickNo) >= 0 && pickNo <= TEAMS * ROUNDS; }
+
+  function commit(p, mine) {
+    var i = pool.indexOf(p);
+    if (i < 0) return;
+    pool.splice(i, 1);
+    var rnd = Math.ceil(pickNo / TEAMS);
+    var inRnd = ((pickNo - 1) % TEAMS) + 1;
+    var tr = document.createElement("tr");
+    if (mine) tr.className = "mine";
+    // "1.06" style pick numbers, name, then team/position -- the shape the
+    // reader keys on. Separate cells, so textContent would run them together;
+    // that is intentional, it is the hazard the reader had to survive.
+    tr.innerHTML = '<td class="pk">' + rnd + "." + (inRnd < 10 ? "0" : "") + inRnd + "</td>" +
+      "<td>" + p.n + "</td>" +
+      '<td class="tm">' + p.t + " - " + p.p + "</td>";
+    log.appendChild(tr);
+    log.parentNode.parentNode.scrollTop = 1e6;
+    taken[p.p] = (taken[p.p] || 0) + 1;
+    pickNo++;
+    render();
+    if (pickNo > TEAMS * ROUNDS) stop();
+  }
+
+  // A rough opponent: mostly the board, some noise, some roster sense. It only
+  // needs to be plausible enough to rehearse against.
+  function opponentPick() {
+    if (!pool.length) { stop(); return; }
+    var rnd = Math.ceil(pickNo / TEAMS);
+    var best = null, bestKey = -1e9;
+    for (var i = 0; i < Math.min(pool.length, 60); i++) {
+      var p = pool[i];
+      if ((p.p === "K" || p.p === "DST") && rnd < 13) continue;
+      var key = -board(p) + (Math.random() - 0.5) * 12;
+      if (key > bestKey) { bestKey = key; best = p; }
+    }
+    commit(best || pool[0], false);
+  }
+
+  function tick() {
+    if (paused) return;
+    if (isMyPick()) return;          // wait for the human
+    opponentPick();
+  }
+  function start() {
+    paused = false;
+    stopTimer();
+    var ms = +document.getElementById("pSpeed").value;
+    timer = setInterval(tick, ms);
+  }
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+  function stop() { paused = true; stopTimer(); }
+
+  document.getElementById("pStart").onclick = start;
+  document.getElementById("pPause").onclick = stop;
+  document.getElementById("pStep").onclick = function () {
+    if (!isMyPick()) opponentPick();
+  };
+  document.getElementById("pReset").onclick = reset;
+  document.getElementById("pSpeed").onchange = function () { if (!paused) start(); };
+  var sb = document.getElementById("pSearch");
+  if (sb) sb.addEventListener("input", render);
+
+  reset();
+})();

@@ -43,7 +43,7 @@ function buildBoards(PLAYERS, adjust) {
   [...live].sort((a, b) => b.v - a.v).forEach((p, i) => ourRank.set(p.n, i + 1));
   const board = new Map();
   for (const p of PLAYERS) {
-    const espn = p.espn || p.a;
+    const espn = p.y || p.espn || p.a;   // the board they will actually use
     const ours = ourRank.has(p.n) ? ourRank.get(p.n) : espn;
     board.set(p.n, (1 - adjust) * espn + adjust * ours);
   }

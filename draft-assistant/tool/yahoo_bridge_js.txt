@@ -161,13 +161,38 @@ function resolveContainer(el) {
     n = n.parentElement;
   }
   if (!levels.length) return el;
+
   // Deepest-first, so the first hit is always the smallest qualifying element.
   const bestPick = Math.max.apply(null, levels.map(l => l.withPick));
   if (bestPick >= 2) {
     for (const l of levels) if (l.withPick === bestPick) return l.el;
   }
-  // No pick numbers anywhere (some boards do not print them): settle for the
-  // smallest ancestor that sees more than one player, which is the row list.
+  // Content cannot discriminate when the log is nearly empty -- and AT THE START
+  // OF A DRAFT it is empty, which is exactly when you bind it. Worse, an empty
+  // list has no height, so you cannot click it at all; you click the panel
+  // around it, or its heading. Climbing by match count from there finds nothing
+  // and walks into a wrapper that also holds the available list.
+  //
+  // So fall back to structure. Working outward from the click, take the first
+  // level that either IS a list or CONTAINS one, preferring the emptiest
+  // candidate: at the start of a draft the pick log holds nothing while the
+  // available list holds hundreds, and anything over MAX_REGION is excluded
+  // outright, so the two separate cleanly with no content to go on.
+  if (bestPick < 2) {
+    const SEL = "tbody,ul,ol,[role=rowgroup],[role=list]";
+    const listy = e => /^(TBODY|UL|OL|TABLE|DL)$/.test(e.tagName) ||
+      ["rowgroup", "list", "listbox", "table", "grid"]
+        .indexOf((e.getAttribute("role") || "").toLowerCase()) >= 0;
+    for (const l of levels) {
+      if (listy(l.el) && l.all <= MAX_REGION) return l.el;
+      if (!l.el.querySelectorAll) continue;
+      const inner = Array.prototype.slice.call(l.el.querySelectorAll(SEL))
+        .map(x => ({ el: x, n: readRegion(x).length }))
+        .filter(x => x.n <= MAX_REGION);
+      if (inner.length) { inner.sort((a, b) => a.n - b.n); return inner[0].el; }
+    }
+  }
+  // Otherwise settle for the smallest ancestor that sees more than one player.
   for (const l of levels) if (l.all >= 2 && l.all <= MAX_REGION) return l.el;
   let best = levels[0];
   for (const l of levels) if (l.all > best.all && l.all <= MAX_REGION) best = l;

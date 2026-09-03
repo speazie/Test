@@ -85,4 +85,8 @@ node -e '
 node tool/make_userscript.js "$HASH" || fail "userscript generation failed"
 node --check tool/yahoo-draft-bridge.user.js || fail "userscript has a syntax error"
 
+# ---- third target: the no-install practice page ----
+node tool/make_practice.js "$HASH" || fail "practice page generation failed"
+grep -q "sstlv-PRACTICE-live" tool/practice.html || fail "practice page shares storage with the real tool"
+
 echo "build ok -> $OUT ($(wc -c < "$OUT") bytes, sha256:${HASH:0:16}…)"

@@ -49,7 +49,11 @@ const countPos=p=>mine.filter(n=>byName[n]&&byName[n].p===p).length;
 // Every player has a board rank (the ESPN sheet where we have it, ADP otherwise).
 // As picks come in we measure whether a position is going FASTER than that board
 // implies, and pull its expected availability forward accordingly.
-function boardRank(p){ return p.espn || p.a; }
+// The board the opponents will ACTUALLY use, in priority order: the league's
+// own Yahoo player list where we captured it (`y`), the ESPN sheet where we
+// have it (`espn`), ADP otherwise. Yahoo is preferred because it is the list
+// on screen in front of the other nine managers during the draft.
+function boardRank(p){ return p.y || p.espn || p.a; }
 
 function pace(){
   const pick=curPick();

@@ -45,7 +45,7 @@ function draft(cfg,slot){
       else if(p.p==='QB'&&(have.QB||0)>=1) nb=left<=2?-40:null;
       else nb=fills?40:0;
       if(nb===null)continue;
-      const b=p.espn||p.a;
+      const b=p.y||p.espn||p.a;   // the league's own Yahoo board first
       const key=-b*1.6+nb*0.35-Math.max(0,b-pick)*0.25+gauss()*Math.max(3,b*0.06);
       if(key>bk){bk=key;best=p;}
     }

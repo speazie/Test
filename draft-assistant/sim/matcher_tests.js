@@ -64,8 +64,11 @@ eq('nonsense is not confident', m6.p === null || m6.conf < 0.6, true);
 console.log('\nlikely-next panel');
 const lk = A.likelyNext(20);
 eq('returns 20', lk.length, 20);
+// Board priority is Yahoo (the league's own list) > ESPN > ADP -- see
+// boardRank() in the engine. These are the players about to be taken.
+const brank = p => p.y || p.espn || p.a;
 eq('sorted by opponent board rank',
-  lk.every((p, i) => i === 0 || (lk[i - 1].espn || lk[i - 1].a) <= (p.espn || p.a)), true);
+  lk.every((p, i) => i === 0 || brank(lk[i - 1]) <= brank(p)), true);
 // Once a player is gone he must drop off the panel.
 A.markGone(lk[0].n);
 eq('a gone player leaves the panel', A.likelyNext(20).some(p => p.n === lk[0].n), false);

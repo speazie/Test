@@ -34,7 +34,7 @@ function runDraft(mySlot){
       else if(p.p==='QB'&&(have.QB||0)>=1) nb = left<=2?-40:null;
       else nb = fills?40:0;
       if(nb===null) continue;
-      const board=p.espn||p.a;
+      const board=p.y||p.espn||p.a;   // the league's own Yahoo board first
       const key=-board*1.6+nb*0.35-Math.max(0,board-pick)*0.25+gauss()*Math.max(3,board*0.06);
       if(key>bk){bk=key;best=p;}
     }
