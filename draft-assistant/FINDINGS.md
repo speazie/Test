@@ -125,6 +125,50 @@ draft-capital bin does not.
 
 ---
 
+## 2b. The headline number assumes nine oblivious opponents
+
+Every title-rate figure in this repository — 46% in the README, 41% here — is
+computed with opponents drafting the **raw ESPN board**, priced for 4-point
+passing TDs, never noticing the league setting. That is the most favourable
+possible assumption about nine other people, and it was baked in silently.
+
+It is also questionable: **Yahoo's draft room displays ranks adjusted to the
+league's own scoring**, so a manager who drafts off the board in front of him is
+already partly corrected without needing to understand why.
+
+`sim/opponent_stress.js` sweeps it. `adjust` = how far the field has repriced
+toward our valuations (0 = raw ESPN board, 1 = they value players as we do):
+
+| adjust | Stafford's board rank | Playoffs | **Title** |
+|---|---|---|---|
+| **0 — every other sim here** | 86 | 88.9% | **40.7%** |
+| 0.25 | 68 | 73.6% | **26.7%** |
+| **0.5 — the tool's own mock-draft default** | 50 | 44.7% | **11.4%** |
+| 0.75 | 31 | 23.2% | 4.4% |
+| 1.0 | 13 | 19.5% | 3.9% |
+
+**A quarter-correction costs 14 title points. A half-correction takes the edge
+to 11.4% — a rounding error above the 10% random baseline.**
+
+Note the middle row. The tool's own mock draft ships with `ADJUST = 0.5`,
+described in its source as *"they have noticed and half-corrected"*. At exactly
+that assumption the edge is gone. The repo's headline numbers and the repo's own
+opponent model disagree with each other by 29 title points, and nobody noticed
+because they live in different files.
+
+### What this means practically
+
+1. **Quote a much lower number.** Between this and the self-referential
+   projections, a defensible expectation is meaningfully below the README's
+   15–30%. The edge is real but conditional on the field staying asleep.
+2. **The `HIDE` button is not paranoia.** It is the single cheapest way to
+   protect the largest sensitivity in the model.
+3. **Watch the QB pace indicator.** The engine already measures whether a
+   position is going faster than its board implies, and pulls players forward
+   when it is. If quarterbacks start going early, the field has adjusted — and
+   the tool will react on its own. That mechanism is the hedge, and it already
+   exists.
+
 ## 3. Six tuning knobs are dead
 
 Swept 16 candidate configs, 3,200 seasons each, paired against baseline on

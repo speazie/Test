@@ -82,6 +82,32 @@ board persists across a reload, so nothing is lost if the page refreshes.
    the draft has not started, tap **ARM**.
 5. That is it. Picks now land by themselves.
 
+## The thing that actually decides whether this works
+
+The whole edge is that the other nine managers are pricing quarterbacks for
+4-point passing TDs. Measured sensitivity to that assumption:
+
+| If the field has repriced... | Your title odds |
+|---|---|
+| not at all | 40.7% |
+| a quarter of the way | 26.7% |
+| **halfway** | **11.4%** |
+| fully | 3.9% |
+
+A random team is 10%. **Halfway corrected and the edge is gone.** Note Yahoo's
+draft room shows ranks adjusted to your league's scoring, so the field is not
+starting from zero.
+
+Two practical consequences:
+
+1. **Use HIDE if anyone can see your screen.** The reasoning text names the
+   exploit out loud. This is the cheapest possible insurance on the single
+   largest sensitivity in the model.
+2. **Watch when quarterbacks start going.** If they go earlier than their ADP,
+   the field has noticed. You do not need to do anything — the engine measures
+   position pace and pulls players forward automatically — but it tells you what
+   kind of draft you are in.
+
 ## One judgement call the tool cannot make for you
 
 **At pick 35 the tool will recommend Jadarian Price, every time.** He is a
