@@ -3,6 +3,27 @@
 Everything needed to rebuild, verify, or extend the draft tool. Built for one
 specific league; the scoring is unusual and most of the edge comes from that.
 
+**Drafting today? Read [`DRAFT_DAY.md`](DRAFT_DAY.md) instead — this file is the
+model documentation.**
+
+## Quick start
+
+```bash
+./build.sh      # assemble both artifacts from source; refuses to ship a broken one
+./verify.sh     # build + every test (add --full for the season Monte Carlo)
+```
+
+Two artifacts are built from one set of sources:
+
+| Artifact | Use |
+|---|---|
+| `tool/live-draft-assistant.html` | Standalone. Works with no network at all. Tap/type entry. |
+| `tool/yahoo-draft-bridge.user.js` | Tampermonkey userscript. Mounts the same tool on the Yahoo draft page and reads picks off the board automatically. |
+
+They share `tool/shell_html.txt`, `data/players.json` and `tool/engine_js.txt`,
+so they cannot drift apart. Both are stamped with a hash of those sources, and
+every simulation refuses to run against a stale stamp.
+
 ---
 
 ## 1. The league
@@ -113,6 +134,42 @@ change was **not statistically significant** on held-out seeds (+1.7 pts, ±5.4)
 
 ---
 
+## 3b. Board input (`tool/yahoo_bridge_js.txt`)
+
+The engine was never the bottleneck — entering picks was. Three paths, in the
+order they are relied on:
+
+1. **The bridge reads the Yahoo board.** No typing, no tapping.
+2. **Tap** a player in the "going next" panel (20 players, opponents' board
+   order). Most picks come from that list.
+3. **Type** 3–4 characters: `stfd`, `jsn`, `ja ch`. Enter marks him gone.
+
+**The reader deliberately does not parse Yahoo's markup.** No live draft room
+was reachable while building it, so a hardcoded selector would have been an
+unverified guess that fails silently on draft night. It instead matches against
+our own 237 names, which is the one thing that cannot change underneath us.
+
+The hazard is that a draft room shows two lists of players — picks made, and
+players available — and reading the wrong one marks the entire pool as drafted.
+Four guards, each with a test:
+
+| Guard | Why |
+|---|---|
+| Region bound by one click; `resolveContainer` climbs to the list using **pick numbers** as the discriminator | A pick log prints a pick number per row; an available list does not. Without this it climbed into the wrapper holding *both* lists. |
+| >5 new names in one scan pauses and says why | A burst means the wrong region was bound. |
+| Confidence <0.85 goes to a one-tap confirm strip | "Robinson" is three players; auto-committing the wrong one corrupts everything downstream. |
+| Joining mid-draft imports the existing board only on an explicit tap | On a cold start there is no way to tell a log from a list without being told. |
+
+`matchBoardName` separates *stale data* from *a wrong match*: an exact, unique
+full-name match whose team disagrees with Yahoo is our team field being out of
+date, so it commits and flags the discrepancy. An ambiguous name with a team
+mismatch does not commit.
+
+**Yahoo's official API is not used.** Reading fantasy data through it now
+requires manual approval from Yahoo, which is not a plan for an imminent draft.
+If approved credentials already exist, `league/{key}/draftresults` is readable
+during a live draft and would be strictly more reliable than DOM reading.
+
 ## 4. Simulation
 
 `sim/drafts.js` runs full 10-team drafts (you = engine, opponents = ESPN board +
@@ -163,3 +220,40 @@ structurally biased toward me. **A defensible expectation is 15–30%, not 46%.*
 
 Every one of these was found by a human noticing bad output, not by a test.
 That is the single most important fact about this codebase.
+
+Three more, found while building the board reader — the first two by a test,
+which is a change worth noting:
+
+9. **`textContent` glues adjacent elements together.** `<span>1.01</span>Bijan`
+   reads as `1.01Bijan`, which matches neither a pick number nor a name, so the
+   reader saw an empty board and said nothing. Row text is now assembled by
+   walking text nodes so element boundaries become spaces.
+10. **Climbing to the container by "more matches is better"** walked straight
+    past the pick list into the wrapper that holds the pick list *and* the
+    available list, and imported the whole player pool as drafted. Pick numbers
+    now decide where to stop.
+11. **`window.storage` is not a browser API.** `save()` threw on every call, the
+    throw was swallowed by its own `catch`, and *nothing was ever persisted* —
+    one refresh mid-draft lost the entire board. Now `localStorage`, and the
+    no-storage case is surfaced instead of hidden.
+
+## 7. Verification
+
+`./verify.sh` runs, in fail-fast order:
+
+| Step | What it proves |
+|---|---|
+| `build.sh` | Both artifacts assemble, parse, and carry a source-hash stamp. |
+| `sim/matcher_tests.js` | 24 assertions on name matching and confidence. |
+| `sim/regression_tests.js` | 40 mock drafts: no broken rosters, no empty starting slots. |
+| `sim/engine_fingerprint.js` | 30 seeded drafts hash identically to a named baseline — an exact "did the engine change?" answer that a sampled title rate cannot give. |
+| `sim/browser_tests.js` | 25 tests in real Chromium: fuzzy entry, persistence across reload, and the bridge against a draft-room fixture including the available-list trap. |
+
+The fingerprint is the one to run after any change that was not *meant* to touch
+the draft engine. Compare against the commit you started from:
+
+```bash
+git show <rev>:draft-assistant/tool/live-draft-assistant.html > /tmp/base.html
+node sim/engine_fingerprint.js --html /tmp/base.html
+node sim/engine_fingerprint.js
+```
