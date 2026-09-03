@@ -77,9 +77,51 @@ Yet those bins put **Jadarian Price at our #16 overall against a field rank of
 #62** — and the draft plan takes him at pick 35 in **100% of simulated drafts**.
 A fourth-round pick, every time, on the least-supported number in the model.
 
-`sim/rookie_stress.js` prices this as a decision rather than an opinion: it
-crosses what we believe when drafting against how wrong the rookie numbers
-actually are, and reports the regret in each corner.
+### Pricing that bet (`sim/rookie_stress.js`, 1,920 seasons per cell)
+
+Rows = how much we discount rookies **when drafting**. Columns = how wrong the
+rookie numbers **actually are**. The truth-side haircut applies to everyone's
+rookies, so avoiding them helps *relatively* when they bust.
+
+| belief \ truth | rookies right | 15% over | 30% over | **worst case** |
+|---|---|---|---|---|
+| **trust them fully (shipped)** | **40.7%** | 36.5% | 33.2% | **33.2%** |
+| discount 15% | 37.4% | 39.7% | 40.1% | **37.4%** |
+| discount 30% | 37.4% | 39.6% | 40.7% | **37.4%** |
+
+Trusting the bins has the **highest ceiling and the lowest floor**. A modest
+discount flattens the outcome to ~37–41% whatever the truth: it costs 3.3 points
+of ceiling and buys 4.2 points of floor. The effect saturates immediately — 15%
+and 30% give the same floor — so if you discount at all, a small one is enough.
+
+**Precision caveat:** seasons within a draft are correlated, so the effective
+standard error is nearer 2–3 points than the 1.1 the raw count implies. A
+4.2-point floor improvement is roughly 1.5–2 SE. **Suggestive, not proven.**
+
+**Not shipped as an engine change**, for the same reason as everything else
+here: a marginal effect plus an unmeasured structural edit is how this codebase
+got its bug list. Instead the decision is surfaced where it actually bites —
+see below.
+
+### The whole rookie exposure is one pick
+
+Re-running the plan with a 30% rookie discount changes only one early pick:
+
+| Round | As shipped | With rookie discount |
+|---|---|---|
+| R1–R3 | unchanged | unchanged |
+| **R4 (pick 35)** | **Jadarian Price 100%** | **Bucky Irving 100%** |
+| R6 (pick 55) | Stafford | Stafford |
+
+| | EV | VOR | ADP | Field | Projection basis |
+|---|---|---|---|---|---|
+| Jadarian Price (SEA) | 229 | 59 | 79 | 62 | *mean year-1 output of rookie RBs drafted near pick 32* |
+| Bucky Irving (TB) | 220 | 50 | 45 | 41 | ridge model, TD-luck corrected |
+
+Nine VOR separates them. Price's number contains **no player-specific
+information**; Irving's is a real projection the market agrees with. That is the
+trade, and it is yours to make — you may know something about Price that a
+draft-capital bin does not.
 
 ---
 

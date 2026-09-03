@@ -82,6 +82,26 @@ board persists across a reload, so nothing is lost if the page refreshes.
    the draft has not started, tap **ARM**.
 5. That is it. Picks now land by themselves.
 
+## One judgement call the tool cannot make for you
+
+**At pick 35 the tool will recommend Jadarian Price, every time.** He is a
+rookie, and rookie projections are not player-specific — they are the *mean
+year-1 output of running backs drafted near pick 32*. That bin mean rates him
+our #16 overall while the field has him #62.
+
+The alternative the model picks if rookies are discounted at all is **Bucky
+Irving** (VOR 50 vs Price's 59 — nine points), whose projection comes from the
+real ridge model and whom the market agrees with at ADP 45.
+
+Measured tradeoff: trusting the bins has the best ceiling (40.7% title) and the
+worst floor (33.2%). Discounting rookies flattens it to ~37–41% whatever
+happens. That is roughly 1.5–2 SE — suggestive, not proven.
+
+**Take Price if you have a real opinion about him. Take Irving if you do not.**
+This is the single largest unvalidated bet in the model, and it is one pick.
+
+Everything else in the plan is unaffected by this choice.
+
 ## While drafting
 
 | What you see | What it means |
