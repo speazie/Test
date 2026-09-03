@@ -5,6 +5,74 @@ and the scripts named under each heading.
 
 ---
 
+## 0. THE HEADLINE: the "6-point passing TD exploit" does not exist
+
+This is the project's founding premise, and **the model's own data contradicts
+it.** The scoring settings are exactly as documented — that part was verified —
+but the *conclusion* drawn from them is wrong.
+
+The league does pay **6 per passing TD** instead of 4. It also pays **−1 per
+sack** (default 0) and **−2 per interception** (default −1). Those cancel.
+
+`s` in `players.json` is the points our ruleset adds versus a 4-point-TD sheet.
+For quarterbacks it is not the +60 the premise implies:
+
+| QB | passing-TD gain | net `s` after sacks & INTs |
+|---|---|---|
+| Matthew Stafford | ~+60 | **+16** |
+| Josh Allen | ~+60 | +25 |
+| Dak Prescott | ~+60 | +30 |
+| Lamar Jackson | ~+60 | +33 |
+
+A quarterback throwing ~30 TDs gains ~60, then gives back ~35 to sacks and ~15
+to the extra interception penalty. **Net: about +15.** And Stafford gains the
+*least* of the top QBs, because he takes the most sacks.
+
+### Recomputing every position's value under both rulesets
+
+| Position | Mean VOR, our rules | Mean VOR, standard | Shift |
+|---|---|---|---|
+| **QB** | **−8.4** | **−3.3** | **−5.1** |
+| RB | −6.8 | −6.6 | −0.3 |
+| WR | −9.4 | −9.3 | −0.1 |
+| TE | 0.6 | 0.6 | 0.0 |
+
+**Quarterbacks are worth slightly LESS in this league than in a standard one,
+not more.** And the QB pecking order barely moves:
+
+| | Our rules | Standard |
+|---|---|---|
+| QB1 | Stafford, VOR 64 | Stafford, VOR **69** |
+| QB2 | Bo Nix, 35 | Bo Nix, 40 |
+| QB3 | Goff, 21 | Maye, 29 |
+
+Stafford is our QB1 under **both** rulesets, and is worth *five more* points
+under standard scoring.
+
+### What follows
+
+1. **There is no scoring arbitrage.** Whether Yahoo's board is league-adjusted
+   is therefore close to moot: the adjustment is worth ~5 VOR at QB and ~0
+   everywhere else. There is nothing to exploit.
+2. **The Stafford bet is a projection bet, not an exploit.** We rate him 346 EV
+   against Yahoo's 113th overall. That gap comes entirely from our *projection*
+   of him — which is `method: model`, i.e. **model-only, with no consensus
+   check** (see section 2). It would be just as large in a 4-point league.
+3. **Section 2b must be re-read in this light.** The opponent sweep does not
+   measure "has the field noticed the scoring setting". It measures "does the
+   field share our player projections". At `adjust = 1` the field simply agrees
+   with our numbers, and naturally we have no edge. That is a statement about
+   projection disagreement, not about a rules exploit.
+4. **Do not draft Stafford *because of the scoring*.** Draft him if you believe
+   our projection of him. Those are different claims, and only the second one
+   is actually supported.
+
+The README's "Matthew Stafford threw 46 TDs in 2025 and scored 425 points under
+these exact rules" is true and irrelevant: what matters is the *difference*
+between rulesets, and for him it is +16, not +92.
+
+---
+
 ## 1. The rules confirm the model. All of them.
 
 Read from the league settings page (league 1388434), checked line by line
@@ -124,6 +192,45 @@ trade, and it is yours to make — you may know something about Price that a
 draft-capital bin does not.
 
 ---
+
+## 2a. ANSWERED: the Yahoo rankings are NOT adjusted to this league
+
+The open question from section 2b was whether opponents drafting off Yahoo's own
+board are already partly corrected for 6-point passing TDs. The league's actual
+player list (`football.fantasysports.yahoo.com/f1/1388434/players`, Pre-Season
+rank, captured 9/3/26) settles it. **They are not.**
+
+| | Yahoo rank | Our VOR rank | Gap |
+|---|---|---|---|
+| **Matthew Stafford** | **113** | **13** | **+100** |
+| Bo Nix | 102 | 28 | +74 |
+| Jared Goff | 118 | 45 | +73 |
+| Jordan Love | 122 | 67 | +55 |
+
+Four of the six largest disagreements in the entire pool are quarterbacks.
+Supporting evidence:
+
+- **Zero QBs in Yahoo's top 25.** The first is Josh Allen at 32, then Lamar
+  Jackson at 50. Under 6-point passing TDs an elite QB belongs inside the top 20.
+- Yahoo ranks Stafford **below Brock Purdy (97)** and below Dak Prescott (78).
+  A quarterback who threw 46 TDs is 113th on a board that pays 6 per TD only if
+  that board is not paying 6 per TD.
+- Yahoo is *more* mispriced than the ESPN sheet the model assumed: Stafford at
+  **113 vs ESPN's 86**.
+
+**The edge is real, and it is larger than the model assumed.** This is the single
+most important input received, and it resolves the main risk in section 2b in
+your favour.
+
+`data/yahoo_board.json` holds the captured board (ranks 1–125; 123 of 125 matched
+into the pool). `boardRank()` now prefers it over the ESPN sheet, because it is
+literally the list on screen in front of the other nine managers. Re-measured
+with the real board: **40.4% title, 89.5% playoffs** — statistically unchanged
+from the 41.4% measured on the ESPN board, so the swap corrects the inputs
+without moving the answer.
+
+*Caveat:* the list is "All Offense", so kickers and defences are absent and fall
+back to ADP; that costs nothing, since K and DST VOR spans only ±3.
 
 ## 2b. The headline number assumes nine oblivious opponents
 
