@@ -1,0 +1,542 @@
+// Tunable weights. These were previously hardcoded from intuition; they are now
+// optimised against simulated championship rate (see optimise.js).
+var CFG = (typeof CFG_OVERRIDE!=='undefined') ? CFG_OVERRIDE : {"bye2": 14, "bye3": 26, "bye4": 70, "byeAll": 5, "byeNoCover": 7, "byeCover": 9, "reachFree": 8, "reachRate": 0.6, "cuffMult": 0.45, "cuffTop": 70, "cuff": 40, "conc": 10, "stack": 7, "dropMin": 10, "dropMult": 0.55, "dropCap": 30, "runCap": 22, "runRate": 45, "coldPen": 8, "scarMin": 6, "scarMax": 48, "benchWR": 12, "benchRB": 6, "rb5pen": 14};
+;
+const TEAMS=10, ROUNDS=15;
+const SLOTS=[["QB",["QB"]],["WR",["WR"]],["WR",["WR"]],["RB",["RB"]],["RB",["RB"]],
+             ["TE",["TE"]],["W/R/T",["WR","RB","TE"]],["K",["K"]],["DEF",["DST"]],
+             ["BN",null],["BN",null],["BN",null],["BN",null],["BN",null],["BN",null]];
+
+let slot=null, gone=new Set(), mine=[], hist=[], filter="ALL", query="", takenAt={}, goneAt={}, sortMode="value";
+
+const byName=Object.fromEntries(PLAYERS.map(p=>[p.n,p]));
+const myPicks=()=>slot?Array.from({length:ROUNDS},(_,i)=>{const r=i+1;
+  return r%2?(r-1)*TEAMS+slot:r*TEAMS-slot+1;}):[];
+const curPick=()=>gone.size+mine.length+1;
+const nextMine=()=>myPicks().find(n=>n>=curPick());
+const isMyTurn=()=>slot&&nextMine()===curPick();
+
+// ---- roster shape ----
+function fillRoster(){
+  const board=SLOTS.map(([c,ok])=>({code:c,ok,who:null}));
+  const pool=mine.map(n=>byName[n]).filter(Boolean).sort((a,b)=>b.v-a.v);
+  const used=new Set();
+  // dedicated slots first, best eligible player into each
+  board.forEach(s=>{ if(!s.ok||s.ok.length!==1) return;
+    const hit=pool.find(p=>!used.has(p.n)&&s.ok.includes(p.p));
+    if(hit){s.who=hit;used.add(hit.n);} });
+  // then the flex. All eligible players compete for one slot, so compare raw
+  // projected points here — VOR would favour a TE purely because TEs are scarce.
+  board.forEach(s=>{ if(!s.ok||s.ok.length===1) return;
+    const elig=pool.filter(p=>!used.has(p.n)&&s.ok.includes(p.p))
+                   .sort((a,b)=>(b.e+(b.p==="TE"?-8:0))-(a.e+(a.p==="TE"?-8:0)));
+    const hit=elig[0];
+    if(hit){s.who=hit;used.add(hit.n);} });
+  // bench
+  board.forEach(s=>{ if(s.ok) return;
+    const hit=pool.find(p=>!used.has(p.n));
+    if(hit){s.who=hit;used.add(hit.n);} });
+  return board;
+}
+const countPos=p=>mine.filter(n=>byName[n]&&byName[n].p===p).length;
+
+// ---- live board reading ----
+// Every player has a board rank (the ESPN sheet where we have it, ADP otherwise).
+// As picks come in we measure whether a position is going FASTER than that board
+// implies, and pull its expected availability forward accordingly.
+function boardRank(p){ return p.espn || p.a; }
+
+function pace(){
+  const pick=curPick();
+  if(pick<20) return {QB:1,RB:1,WR:1,TE:1,K:1,DST:1};
+  const taken={},expected={};
+  for(const q of PLAYERS){
+    if(q.v<=-90) continue;
+    const isGone=gone.has(q.n)||mine.includes(q.n);
+    taken[q.p]=(taken[q.p]||0)+(isGone?1:0);
+    // how many at this position "should" be gone by now
+    expected[q.p]=(expected[q.p]||0)+(boardRank(q)<pick?1:0);
+  }
+  const out={};
+  for(const pos in taken){
+    const e=Math.max(expected[pos]||0,1), t=taken[pos]||0;
+    out[pos]=Math.max(0.6,Math.min(1.45,t/e));  // >1 hot; capped so a run
+                                                // discounts reach, never erases it
+  }
+  return out;
+}
+
+// Probability a player is still there at pick N, given the live pace.
+function survives(p,N,pc){
+  const hot=pc[p.p]||1;
+  const eff=boardRank(p)/hot;                   // hot position => effectively earlier
+  const sd=Math.max(4,eff*0.16);
+  return 1/(1+Math.exp((N-eff)/sd));
+}
+
+// Best VOR at a position I can realistically still get at my NEXT pick.
+function expectedBest(pos,N,pc){
+  let best=null;
+  for(const q of PLAYERS){
+    if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
+    if(survives(q,N,pc)>=0.55){ if(best===null||q.v>best) best=q.v; }
+  }
+  return best;
+}
+
+// ---- recommendation engine ----
+// Additive weighting. Multiplicative weights invert on negative VOR, which is
+// what let a 4th QB outrank a startable WR in the late rounds.
+const MAX={QB:2,RB:6,WR:8,TE:2,K:1,DST:1};
+const REQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1};   // starters. Flex handled separately.
+const FLEXOK=["RB","WR","TE"];
+
+function shortfall(){
+  const s={},need={};let total=0;
+  for(const p in REQ){ const d=Math.max(0,REQ[p]-countPos(p)); s[p]=d; total+=d; }
+  const surplus=FLEXOK.reduce((a,p)=>a+Math.max(0,countPos(p)-REQ[p]),0);
+  s.FLEX=surplus>0?0:1; total+=s.FLEX;
+  return {s,total};
+}
+const picksLeft=()=>Math.max(0,ROUNDS-mine.length);
+function rosterByes(){
+  const c={}; mine.forEach(n=>{const p=byName[n]; if(p) c[p.b]=(c[p.b]||0)+1;}); return c;
+}
+function byeLoad(){
+  const c={}; fillRoster().slice(0,7).forEach(s=>{   // QB,WR,WR,RB,RB,TE,FLEX
+    if(s.who) c[s.who.b]=(c[s.who.b]||0)+1; });
+  return c;
+}
+
+function lateBest(pos,fromPick){
+  let best=null;
+  for(const q of PLAYERS){
+    if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
+    if(boardRank(q) < fromPick+38) continue;      // near-certain to still be there
+    if(best===null||q.v>best) best=q.v;
+  }
+  return best;
+}
+function scarcity(p,pick){
+  const lb=lateBest(p.p,pick);
+  if(lb===null) return 45;
+  return Math.max(CFG.scarMin, Math.min(CFG.scarMax, p.v-lb));
+}
+function needBonus(pos,rnd,p_ev_hint,P_,pick_){
+  const have=countPos(pos);
+  if(have>=MAX[pos]) return null;                     // hard cap: never recommend
+  const {s,total}=shortfall(), left=picksLeft();
+  const fillsSlot = s[pos]>0;
+  const fillsFlex = s.FLEX>0 && FLEXOK.includes(pos) && !fillsSlot
+                    && !(pos==="TE"&&have>=1);
+  // endgame: if you have exactly enough picks left to fill your empty starting
+  // slots, nothing else may be recommended.
+  if(left<=total) return (fillsSlot||fillsFlex)?900:null;
+  // kicker and defense are streamable; only in the last two rounds
+  if(pos==="K")   return rnd>=15?800:null;
+  if(pos==="DST") return rnd>=14?800:null;
+  // never a backup QB while real roster work remains
+  if(pos==="QB"&&have>=1) return left<=2?-30:null;
+  // Under 6-point passing TDs the QB1 is a genuine early-round asset; VOR now
+  // carries the timing on its own, so only a mild late nudge remains.
+  if(pos==="QB") return (fillsSlot?scarcity(P_,pick_):0) + (rnd<=1?-30:rnd<=4?-12:0);
+  if(pos==="TE"&&have===0) return scarcity(P_,pick_);
+  if(fillsSlot) return scarcity(P_,pick_);
+  if(fillsFlex){
+    // worth the flex only if he'd actually outscore the alternatives there
+    const bestFlex=Math.max(0,...mine.map(n=>byName[n]).filter(x=>x&&FLEXOK.includes(x.p)).map(x=>x.e));
+    return p_ev_hint>=bestFlex-25?22:6;
+  }
+  // bench balance: you start 2 WR + a flex, so don't leave yourself 3 deep there
+  if(pos==="WR"&&have<4) return CFG.benchWR;
+  if(pos==="RB"&&have<4) return CFG.benchRB;
+  if(pos==="RB"&&have>=4&&countPos("WR")<5) return -CFG.rb5pen; // a 5th RB over a 4th WR is waste
+  return 0;                                            // pure bench upside
+}
+function bestSurviving(pos,nextPick){
+  // best VOR at this position likely to last until my next pick
+  let best=-999;
+  for(const q of PLAYERS){
+    if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
+    if(q.a < nextPick) continue;        // realistically gone by then
+    if(q.v>best) best=q.v;
+  }
+  return best===-999?null:best;
+}
+let PACE={QB:1,RB:1,WR:1,TE:1,K:1,DST:1};
+function score(p,pick,rnd){
+  const nb=needBonus(p.p,rnd,p.e,p,pick);
+  if(nb===null) return null;
+  let s=p.v+nb, why=[];
+  const sf=shortfall().s;
+  if(nb>=900) why.push("<b>must fill</b> — you have "+picksLeft()+" picks and "+shortfall().total+" empty starting slots");
+  else if(nb>=800) why.push("<b>last-round slot</b>");
+  else if(sf[p.p]>0) why.push("<b>fills your open "+p.p+"</b> slot");
+  else if(sf.FLEX>0&&FLEXOK.includes(p.p)) why.push("fills your <b>flex</b>");
+  else why.push("bench value");
+  if(p.v>=30) why.push("<b>"+Math.round(p.v)+" pts</b> over a replacement "+p.p);
+  const bl=byeLoad(), rl=rosterByes();
+  if(FLEXOK.concat("QB").includes(p.p)){
+    const st=bl[p.b]||0, all=rl[p.b]||0;
+    if(st>=4){ s-=CFG.bye4; why.push("<b>bye disaster</b> — "+st+" starters off in week "+p.b); }
+    else if(st>=3){ s-=CFG.bye3; why.push("<b>bye disaster</b> — "+st+" starters already off in week "+p.b); }
+    else if(st>=2){ s-=CFG.bye2; why.push("<b>bye clash</b> — you already start "+st+" in week "+p.b); }
+    else if(all>=4){ s-=CFG.byeAll; why.push(all+" of your roster is off in week "+p.b); }
+  }
+  const sameSkill=mine.filter(n=>byName[n]&&byName[n].t===p.t&&FLEXOK.includes(byName[n].p)).length;
+  if(sameSkill>=2&&FLEXOK.includes(p.p)){ s-=CFG.conc;
+    why.push("third piece of the "+p.t+" offense"); }
+  let isCuff=false;
+  if(p.p==="RB"){
+    const prot=mine.map(n=>byName[n]).filter(x=>x&&x.p==="RB"&&x.t===p.t&&x.v>=40)
+                   .sort((a,b)=>b.v-a.v)[0];
+    if(prot){ isCuff=true; s+=prot.v>=80?CFG.cuffTop:CFG.cuff;
+      why.push("<b>handcuff</b> for "+prot.n+" — your season swings on him"); }
+  }
+  // Bye coverage. Only counts once your starters at that position are set.
+  if(FLEXOK.concat("QB").includes(p.p)){
+    const starters=fillRoster().slice(0,7).filter(x=>x.who).map(x=>x.who);
+    const sameSlot=starters.filter(x=>x.p===p.p);
+    if(sameSlot.length){
+      const offWeeks=new Set(sameSlot.map(x=>x.b));
+      const covered=mine.map(n=>byName[n]).filter(x=>x&&x.p===p.p&&!sameSlot.includes(x));
+      if(offWeeks.has(p.b)){
+        s-=CFG.byeNoCover; why.push("<b>no cover</b> — off the same week as your starting "+p.p);
+      }else if([...offWeeks].some(w=>!covered.some(c=>c.b!==w))){
+        s+=CFG.byeCover; why.push("<b>covers week "+[...offWeeks][0]+"</b>, when your "+p.p+" is off");
+      }
+    }
+  }
+  const myQB=mine.map(n=>byName[n]).filter(x=>x&&x.p==="QB");
+  if(["WR","TE"].includes(p.p)&&myQB.some(q=>q.t===p.t)){ s+=CFG.stack; why.push("stacks with your "+p.t+" QB"); }
+  // OPPORTUNITY COST, pace-aware. What does taking him now buy over the best
+  // player at his position I can still expect at my next pick?
+  const picksArr=myPicks(), nxt=picksArr.find(x=>x>pick);
+  if(nxt&&nb<800){
+    const pc=PACE, eb=expectedBest(p.p,nxt,pc);
+    if(eb!==null){
+      const drop=p.v-eb;
+      if(drop>CFG.dropMin){
+        s+=Math.min(CFG.dropCap,(drop-CFG.dropMin)*CFG.dropMult);
+        why.push("<b>+"+Math.round(drop)+" over the best "+p.p+" expected at pick "+nxt+"</b>");
+      }
+    }
+    const hot=pc[p.p]||1;
+    if(hot>=1.35&&p.v>15){
+      s+=Math.min(CFG.runCap,(hot-1.35)*CFG.runRate);
+      why.push("<b>"+p.p+" run in progress</b> — going "+Math.round((hot-1)*100)+"% faster than the board");
+    }
+    if(hot<=0.75&&survives(p,nxt,pc)>0.75){
+      s-=CFG.coldPen; why.push(p.p+"s are falling; he should last to "+nxt);
+    }
+  }
+  // Reach is measured against where he will ACTUALLY go given the live pace,
+  // not against a static preseason board. In a run, "reaching" is just paying
+  // the new market price.
+  // Only a HOT position pulls a player forward. A cold one does not push him
+  // later than his board rank already implies, so clamp at 1.0.
+  const hotNow=Math.max(1.0, PACE[p.p]||1);
+  const effRank=boardRank(p)/hotNow;
+  const reach=boardRank(p)-pick;   // static board; pace no longer discounts reach
+  if(reach>CFG.reachFree&&nb<800){
+    // insurance on your own star carries option value ADP does not price, so a
+    // handcuff is not penalised for being "early".
+    s-=(reach-CFG.reachFree)*(isCuff?CFG.cuffMult:CFG.reachRate);
+    if(reach>18) why.push("<b>"+Math.round(reach)+" picks early</b> — he will still be there");
+    else why.push("likely still there next round");
+  }
+  if(reach<-6) why.push("<b>falling</b> — ADP "+Math.round(p.a));
+  if(p.r===1&&p.av<1){
+    why.push("<b>availability "+Math.round(p.av*100)+"%</b> — EV already cut for it: "+
+             p.d.split(".")[0].toLowerCase());
+  }
+  if(p.src==="E"){   // estimated from ADP; the ruleset effect is not yet in his EV
+    if(p.s<=-3) why.push("our scoring adds value here");
+    if(p.s>=4)  why.push("our scoring <b>costs</b> him vs standard");
+  }
+  return {p,s,why};
+}
+function recommend(){
+  const pick=curPick(), rnd=Math.min(ROUNDS,Math.ceil(pick/TEAMS));
+  PACE=pace();
+  const live=PLAYERS.filter(p=>!gone.has(p.n)&&!mine.includes(p.n)&&p.v>-90);
+  let out=live.map(p=>score(p,pick,rnd)).filter(Boolean).sort((a,b)=>b.s-a.s).slice(0,5);
+  if(out.length) return out;
+  // FALLBACK 1: a required position exists but the pool is empty there.
+  const {s:sf}=shortfall();
+  const missing=Object.keys(sf).filter(k=>k!=="FLEX"&&sf[k]>0);
+  if(missing.length){
+    const anyLeft=live.filter(p=>missing.includes(p.p));
+    if(anyLeft.length){
+      return anyLeft.sort((a,b)=>b.v-a.v).slice(0,5).map(p=>({p,s:p.v,
+        why:["<b>fills your open "+p.p+"</b> slot"]}));
+    }
+    exhausted=missing;   // nothing at that position remains in the pool at all
+  }
+  // FALLBACK 2: take the best player left rather than showing nothing.
+  return live.sort((a,b)=>b.v-a.v).slice(0,5).map(p=>({p,s:p.v,
+    why:["<b>best available</b> — no required-slot player left in the pool"]}));
+}
+let exhausted=[];
+
+// ---- actions ----
+function markGone(n){ if(gone.has(n)||mine.includes(n))return; goneAt[n]=curPick(); hist.push(["g",n]); gone.add(n); render(); }
+function unGone(n){ gone.delete(n); delete goneAt[n]; render(); }
+function takeIt(n){ if(mine.includes(n))return; if(mine.length>=ROUNDS){alert("You already have 15 picks - that is the whole draft.");return;} takenAt[n]=curPick(); gone.delete(n); hist.push(["m",n]); mine.push(n); render(); }
+function unTake(n){ mine=mine.filter(x=>x!==n); render(); }
+function undo(){ const h=hist.pop(); if(!h)return;
+  if(h[0]==="g"){ gone.delete(h[1]); delete goneAt[h[1]]; }
+  else { mine=mine.filter(x=>x!==h[1]); delete takenAt[h[1]]; } render(); }
+
+// ---- mock draft ----
+// Opponents are modelled as experienced, rational drafters: they draft on value
+// over replacement rather than raw ADP, they respect roster construction, and
+// they reach far less than the field. ADJUST controls how far they have
+// recalibrated to OUR ruleset (6-pt passing TDs, sack penalty):
+//   0   = sharp drafters still priced to standard scoring
+//   0.5 = they have noticed and half-corrected      <-- default
+//   1   = they have fully repriced; our QB edge is gone
+let ADJUST=0.5;
+
+function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+const OREPL={};
+(function(){ const r={QB:10,RB:24,WR:28,TE:10,K:10,DST:10};
+  for(const pos in r){ const g=PLAYERS.filter(p=>p.p===pos&&p.v>-90).sort((a,b)=>b.e-a.e);
+    OREPL[pos]=g[Math.min(r[pos],g.length)-1].e; } })();
+
+// what an opponent thinks a player is worth
+const OREPL_STD={};
+(function(){ const r={QB:10,RB:24,WR:28,TE:10,K:10,DST:10};
+  for(const pos in r){ const g=PLAYERS.filter(p=>p.p===pos&&p.v>-90)
+      .map(p=>p.e-(p.s||0)).sort((a,b)=>b-a);
+    OREPL_STD[pos]=g[Math.min(r[pos],g.length)-1]; } })();
+function oppValue(p){
+  const ev   = p.e - (1-ADJUST)*(p.s||0);
+  const base = OREPL[p.p]*ADJUST + OREPL_STD[p.p]*(1-ADJUST);
+  let v = ev - base;
+  if(p.p==="K"||p.p==="DST") v*=0.2;
+  return v;
+}
+const OMAX={QB:2,RB:6,WR:7,TE:2,K:1,DST:1};
+const OREQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1};
+function oppNeed(pos,have,rnd,left){
+  if((have[pos]||0)>=OMAX[pos]) return null;
+  let short=0; for(const k in OREQ) short+=Math.max(0,OREQ[k]-(have[k]||0));
+  const fills=(have[pos]||0)<OREQ[pos];
+  if(left<=short) return fills?900:null;            // must fill starters
+  if(pos==="K")   return rnd>=14?800:null;
+  if(pos==="DST") return rnd>=13?800:null;
+  if(pos==="QB"&&(have.QB||0)>=1) return left<=2?-40:null;
+  if(pos==="TE"&&(have.TE||0)===0&&rnd>=8) return 45;
+  return fills?40:0;
+}
+
+function runMock(){
+  if(!slot){ alert("Pick your draft slot first."); return; }
+  if(mine.length||gone.size){
+    if(!confirm("This replays the draft from where you are now and fills the rest. Continue?")) return;
+  }
+  const mySet=new Set(myPicks());
+  const rosters={}; for(let t=1;t<=TEAMS;t++) rosters[t]={};
+  let guard=0;
+  while(curPick()<=TEAMS*ROUNDS && guard++<400){
+    const pick=curPick(), rnd=Math.ceil(pick/TEAMS);
+    if(mySet.has(pick)&&mine.length<ROUNDS){
+      const r=recommend();
+      if(!r.length) break;
+      takenAt[r[0].p.n]=pick; mine.push(r[0].p.n); hist.push(["m",r[0].p.n]);
+      continue;
+    }
+    const col = rnd%2 ? ((pick-1)%TEAMS)+1 : TEAMS-((pick-1)%TEAMS);
+    const have = rosters[col];
+    const left = ROUNDS - Object.values(have).reduce((a,b)=>a+b,0);
+    const pool=PLAYERS.filter(p=>!gone.has(p.n)&&!mine.includes(p.n)&&p.v>-90);
+    if(!pool.length) break;
+    let best=null,bestKey=-Infinity;
+    for(const p of pool){
+      const nb=oppNeed(p.p,have,rnd,left);
+      if(nb===null) continue;
+      // sharp drafters still disagree, but far less than the open field
+      // Jason (and likely others) are drafting from the ESPN PPR cheat sheet.
+      // Where we have his ranking, that IS his board; fall back to ADP otherwise.
+      const board = p.espn || p.a;
+      const noise = gauss()*Math.max(3, board*0.06);
+      const key = -board*1.6 + nb*0.35 - Math.max(0,board-pick)*0.25 + noise;
+      if(key>bestKey){bestKey=key;best=p;}
+    }
+    if(!best){ best=pool.sort((a,b)=>a.a-b.a)[0]; }
+    goneAt[best.n]=pick; gone.add(best.n); hist.push(["g",best.n]);
+    have[best.p]=(have[best.p]||0)+1;
+  }
+  mocked=true; sortMode="pick"; render();
+  window.scrollTo({top:document.getElementById("roster").offsetTop-120,behavior:"smooth"});
+}
+let mocked=false;
+
+// ---- render ----
+const $=id=>document.getElementById(id);
+function render(){
+  // slots
+  $("slots").innerHTML="";
+  for(let i=1;i<=TEAMS;i++){
+    const b=document.createElement("button");
+    b.className="slot"; b.textContent=i; b.setAttribute("aria-pressed",i===slot);
+    b.onclick=()=>{slot=i;save();render();};
+    $("slots").appendChild(b);
+  }
+  const pick=curPick(), nm=nextMine();
+  $("curPick").textContent=pick;
+  $("nextPick").textContent=slot?(nm||"done"):"—";
+  $("cnt").innerHTML=mine.length+'<span style="font-size:12px;color:var(--mute)">/15</span>';
+  $("pickBox").className="stat"+(isMyTurn()?" turn":"");
+  $("mineBox").className="stat"+(isMyTurn()?" turn":"");
+  $("away").textContent = !slot ? "Pick your draft slot to start."
+    : isMyTurn() ? "You're on the clock." : (nm? (nm-pick)+" picks until your turn." : "Draft complete.");
+  const away = nm ? (nm-pick) : null;
+  $("fnow").innerHTML =
+    '<span class="fl1">Pick <b>'+pick+'</b> · R'+Math.min(ROUNDS,Math.ceil(pick/TEAMS))+
+    ' · '+gone.size+' gone</span>'+
+    '<span class="fl2">'+(!slot?'pick a slot'
+      : nm===pick ? '<b class="yo">YOUR PICK NOW</b>'
+      : nm ? 'next: <b>'+nm+'</b> ('+away+' away)'
+      : '<b>draft complete</b>')+'</span>';
+
+  // recommendations
+  const recs=recommend();
+  $("recBox").className="rec"+(isMyTurn()?" live":"");
+  $("recHd").textContent=isMyTurn()?"YOU'RE UP — TAKE ONE OF THESE":"If your pick came now";
+  if(exhausted.length){
+    $("still").className="still tight";
+    $("still").innerHTML='<span class="needk">POOL EMPTY AT</span> '+exhausted.join(", ")+
+      ' — every one is drafted here. Take any '+exhausted[0]+' from your league app; they are interchangeable.';
+    exhausted=[];
+  }
+  $("recList").innerHTML="";
+  if(!recs.length) $("recList").innerHTML='<div class="ritem"><div class="body why">Nothing left to suggest.</div></div>';
+  recs.forEach((r,i)=>{
+    const d=document.createElement("div");
+    d.className="ritem"+(i===0?" top":"");
+    d.innerHTML='<div class="no">'+(i+1)+'</div><div class="body">'+
+      '<div class="nm">'+r.p.n+' <span class="pos '+r.p.p+'">'+r.p.p+'</span> '+
+      '<span class="meta">'+r.p.t+' · bye '+r.p.b+' · ADP '+Math.round(r.p.a)+'</span></div>'+
+      '<div class="why">'+(r.why.slice(0,3).join(" &middot; ")||"best value available")+'</div></div>';
+    const btn=document.createElement("button");
+    btn.className="take"+(i===0?"":" ghost"); btn.textContent="I TOOK HIM";
+    btn.onclick=()=>takeIt(r.p.n);
+    d.appendChild(btn); $("recList").appendChild(d);
+  });
+
+  // roster
+  $("roster").innerHTML="";
+  fillRoster().forEach(s=>{
+    const d=document.createElement("div");
+    d.className="rslot"+(s.who?" full":"");
+    d.innerHTML='<span class="c">'+s.code+'</span>'+
+      (s.who?'<span class="who">'+s.who.n+
+             '<span class="rmeta"><span class="pos '+s.who.p+'">'+s.who.p+'</span>'+
+             (takenAt[s.who.n]?'<b class="pk">#'+takenAt[s.who.n]+'</b> ':'')+
+             ' EV <b>'+s.who.e+'</b> · VOR <b>'+Math.round(s.who.v)+'</b>'+
+             (takenAt[s.who.n]?' · ADP '+Math.round(s.who.a):'')+
+             (s.who.av<1?' · '+Math.round(s.who.av*100)+'%':'')+'</span></span>'+
+             '<span class="bw">bye '+s.who.b+'</span>'
+            :'<span class="who" style="color:var(--mute)">—</span>');
+    if(s.who) d.onclick=()=>unTake(s.who.n);
+    $("roster").appendChild(d);
+  });
+  {const R=fillRoster();
+   const st=R.slice(0,9).filter(x=>x.who), bn=R.slice(9).filter(x=>x.who);
+   const sv=st.reduce((a,x)=>a+x.who.v,0), se=R.slice(0,7).filter(x=>x.who).reduce((a,x)=>a+x.who.e,0);
+   const bv=bn.reduce((a,x)=>a+x.who.v,0);
+   const el=document.getElementById("rtot");
+   el.innerHTML = st.length
+     ? '<span class="tk">STARTERS</span> '+Math.round(se)+' pts · '+Math.round(sv)+' VOR'+
+       '<span class="tk" style="margin-left:12px">BENCH</span> '+Math.round(bv)+' VOR'
+     : '';}
+  const sf=shortfall(); const missing=Object.entries(sf.s).filter(([k,v])=>v>0)
+      .map(([k,v])=>v>1?k+"\u00d7"+v:k);
+  const stillEl=document.getElementById("still");
+  stillEl.innerHTML = missing.length
+    ? '<span class="needk">STILL NEED</span> '+missing.join(", ")+
+      ' <span class="needk">'+picksLeft()+' PICKS LEFT</span>'
+    : '<span class="needk">STARTERS COMPLETE</span> '+picksLeft()+' picks left for bench';
+  stillEl.className = (picksLeft()<=sf.total&&missing.length)?"still tight":"still";
+  const bl=byeLoad(); const bad=Object.entries(bl).filter(([w,c])=>c>=3);
+  $("warns").innerHTML = bad.length
+    ? '<div class="warn">Bye trouble: you start <b>'+bad[0][1]+'</b> players in week <b>'+bad[0][0]+'</b>. Avoid adding more.</div>'
+    : "";
+
+  // filters
+  const F=["ALL","RB","WR","TE","QB","K","DST","MINE"];
+  $("filters").innerHTML="";
+  F.forEach(f=>{const b=document.createElement("button");
+    b.className="f";b.textContent=f;b.setAttribute("aria-pressed",f===filter);
+    b.onclick=()=>{filter=f;render();};$("filters").appendChild(b);});
+  const sep=document.createElement("span"); sep.className="sortsep"; sep.textContent="SORT";
+  $("filters").appendChild(sep);
+  [["value","VALUE"],["pick","PICK #"]].forEach(([m,lab])=>{
+    const b=document.createElement("button");
+    b.className="f sortb";b.textContent=lab;b.setAttribute("aria-pressed",m===sortMode);
+    b.onclick=()=>{sortMode=m;render();};$("filters").appendChild(b);});
+
+  // list
+  const q=query.toLowerCase();
+  const pickOf=p=>takenAt[p.n]||goneAt[p.n]||Infinity;
+  const rows=PLAYERS.filter(p=>{
+    if(filter==="MINE") return mine.includes(p.n);
+    if(filter!=="ALL"&&p.p!==filter) return false;
+    if(q&&!(p.n.toLowerCase().includes(q)||p.t.toLowerCase().includes(q))) return false;
+    return true;
+  }).sort((a,b)=> sortMode==="pick"
+        ? (pickOf(a)-pickOf(b)) || (b.v-a.v)
+        : 0).slice(0,180);
+  $("list").innerHTML="";
+  rows.forEach(p=>{
+    const isG=gone.has(p.n), isM=mine.includes(p.n), dead=p.r===2;
+    const d=document.createElement("div");
+    d.className="row"+(isG?" gone":"")+(isM?" mine":"")+(dead?" dead":"");
+    const pk=pickOf(p);
+    d.innerHTML='<div class="info"><div class="nm">'+
+      (pk<Infinity?'<span class="pknum'+(isM?' me':'')+'">#'+pk+'</span> ':'')+p.n+
+      (p.r===1?' <span class="riskdot">'+Math.round(p.av*100)+'%</span>':'')+
+      (dead?' <span class="riskdot">OUT</span>':'')+'</div>'+
+      '<div class="meta"><span class="pos '+p.p+'">'+p.p+'</span> '+p.t+' · bye '+p.b+
+      ' · ADP '+Math.round(p.a)+' · EV '+p.e+' · VOR '+Math.round(p.v)+'</div></div>';
+    const box=document.createElement("div"); box.className="btns";
+    const gx=document.createElement("button");
+    gx.className="b x"+(isG?" on":""); gx.textContent="X";
+    gx.title="someone else drafted him";
+    gx.onclick=()=>isG?unGone(p.n):markGone(p.n);
+    const mb=document.createElement("button");
+    mb.className="b"+(isM?" on":""); mb.textContent="MINE";
+    mb.onclick=()=>isM?unTake(p.n):takeIt(p.n);
+    box.append(gx,mb); d.appendChild(box); $("list").appendChild(d);
+  });
+  save();
+}
+
+// ---- persistence ----
+async function save(){ try{ await window.storage.set("sstlv-live",
+  JSON.stringify({slot,gone:[...gone],mine,takenAt,goneAt,sortMode})); }catch(e){} }
+async function load(){ try{
+  const r=await window.storage.get("sstlv-live");
+  if(r&&r.value){const d=JSON.parse(r.value);
+    slot=d.slot||null; gone=new Set(d.gone||[]); mine=d.mine||[]; takenAt=d.takenAt||{}; goneAt=d.goneAt||{}; sortMode=d.sortMode||"value";}
+  }catch(e){} render(); }
+
+$("q").addEventListener("input",e=>{query=e.target.value;render();});
+$("mock").onclick=runMock;
+$("addBtn").onclick=()=>{
+  const nm=$("addName").value.trim(), ps=$("addPos").value;
+  if(!nm) return;
+  if(!byName[nm]){ PLAYERS.push({n:nm,p:ps,t:"--",b:0,a:200,e:0,v:-2,s:0,src:"E",r:0,
+    d:"Added by hand during the draft."}); byName[nm]=PLAYERS[PLAYERS.length-1]; }
+  takeIt(nm); $("addName").value="";
+};
+$("undo").onclick=undo;
+$("reset").onclick=()=>{gone.clear();mine=[];hist=[];takenAt={};goneAt={};sortMode="value";render();};
+load();
+</script>
+</body>
+</html>

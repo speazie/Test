@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SSTLV Live Draft Assistant</title>
+<style>
+:root{
+  --bg:#0D1015; --card:#161B22; --card2:#11161D; --line:#262E39;
+  --ink:#E9EEF3; --mute:#8794A5; --hi:#F5C518;
+  --rb:#4ADE80; --wr:#42B8F5; --te:#C08CF7; --qb:#FB8C42; --k:#94A3B8; --dst:#F472B6;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px;line-height:1.4;padding-bottom:90px}
+.wrap{max-width:660px;margin:0 auto}
+header{padding:14px 14px 10px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#171D26,var(--bg))}
+h1{margin:0;font-size:19px;letter-spacing:-.4px;font-weight:800}
+h1 em{font-style:normal;color:var(--hi)}
+.eyebrow{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--mute);margin:0 0 4px}
+.lbl{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mute);margin:0 0 7px}
+section{padding:14px}
+.slots{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
+.slot{appearance:none;border:1px solid var(--line);background:var(--card2);color:var(--ink);
+  font-family:var(--mono);font-size:14px;font-weight:600;padding:9px 0;border-radius:6px;cursor:pointer}
+.slot[aria-pressed=true]{background:var(--hi);color:#0D1015;border-color:var(--hi)}
+
+.status{display:flex;gap:8px;align-items:stretch;margin-top:12px}
+.stat{flex:1;border:1px solid var(--line);background:var(--card2);border-radius:8px;padding:9px 10px}
+.stat .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute)}
+.stat .v{font-family:var(--mono);font-size:20px;font-weight:700;margin-top:2px}
+.turn{border-color:var(--hi);background:rgba(245,197,24,.11)}
+.turn .v{color:var(--hi)}
+.away{font-size:12px;color:var(--mute);font-family:var(--mono);margin-top:8px}
+
+.still{font-family:var(--mono);font-size:11px;color:var(--ink);background:var(--card2);
+  border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin-bottom:10px;letter-spacing:.02em}
+.still.tight{border-color:var(--hi);background:rgba(245,197,24,.11);color:var(--hi)}
+.needk{font-size:8.5px;letter-spacing:.14em;color:var(--mute);margin-right:4px}
+.still.tight .needk{color:var(--hi)}
+.rec{border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden}
+.rec.live{border-color:var(--hi);box-shadow:0 0 0 1px rgba(245,197,24,.25)}
+.rhd{padding:9px 12px;background:var(--card2);border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute)}
+.rec.live .rhd{color:var(--hi)}
+.ritem{display:flex;gap:9px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line)}
+.ritem:last-child{border-bottom:0}
+.ritem .no{font-family:var(--mono);font-size:11px;color:var(--mute);width:15px;flex:none;padding-top:2px}
+.ritem.top .no{color:var(--hi);font-weight:700}
+.ritem .body{flex:1;min-width:0}
+.ritem .nm{font-weight:600}
+.ritem.top .nm{font-weight:800}
+.why{font-size:11.5px;color:var(--mute);margin-top:2px;line-height:1.45}
+.why b{color:#BFCAD8;font-weight:600}
+.take{appearance:none;border:1px solid var(--hi);background:var(--hi);color:#0D1015;
+  font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;
+  padding:6px 9px;border-radius:5px;cursor:pointer;flex:none;align-self:center}
+.take.ghost{background:none;color:var(--mute);border-color:var(--line)}
+
+.pos{font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 4px;border-radius:3px;
+  color:#0D1015;display:inline-block;min-width:30px;text-align:center}
+.pos.RB{background:var(--rb)}.pos.WR{background:var(--wr)}.pos.TE{background:var(--te)}
+.pos.QB{background:var(--qb)}.pos.K{background:var(--k)}.pos.DST{background:var(--dst)}
+.meta{font-family:var(--mono);font-size:10px;color:var(--mute)}
+
+.roster{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.rtot{font-family:var(--mono);font-size:10.5px;color:var(--mute);margin-top:8px;
+  padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card2)}
+.rtot .tk{font-size:8.5px;letter-spacing:.13em;color:#5F6C7D;margin-right:5px}
+.rmeta{display:block;font-family:var(--mono);font-size:9.5px;color:var(--mute);
+  margin-top:2px;white-space:nowrap}
+.rmeta b{color:var(--ink);font-weight:600}
+.rmeta .pk{color:var(--hi);font-weight:700}
+.rmeta .pos{font-size:8px;min-width:24px;padding:1px 3px;margin-right:4px}
+.rslot{display:flex;gap:7px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;
+  padding:7px 8px;background:var(--card2);min-height:34px}
+.rslot .c{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--mute);width:34px;flex:none;padding-top:2px}
+.rslot.full{background:var(--card);border-color:#38424F}
+.rslot .who{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.rslot .bw{font-family:var(--mono);font-size:8.5px;color:#5F6C7D;flex:none;padding-top:2px}
+.warn{margin-top:9px;border:1px solid #7A5C10;background:rgba(245,197,24,.09);
+  border-radius:7px;padding:8px 10px;font-size:12px;color:#F0DFA8}
+
+.tools{display:flex;gap:7px;margin-bottom:10px}
+input[type=search]{flex:1;appearance:none;background:var(--card2);border:1px solid var(--line);
+  color:var(--ink);border-radius:7px;padding:10px 11px;font-size:15px;font-family:inherit}
+input[type=search]:focus{outline:none;border-color:var(--hi)}
+select{appearance:none;background:var(--card2);border:1px solid var(--line);color:var(--ink);
+  border-radius:7px;padding:10px 8px;font-size:14px;font-family:var(--mono)}
+.filters{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:9px}
+.f{appearance:none;border:1px solid var(--line);background:var(--card2);color:var(--mute);
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;padding:6px 9px;border-radius:5px;cursor:pointer}
+.f[aria-pressed=true]{background:var(--ink);color:#0D1015;border-color:var(--ink)}
+
+.row{display:flex;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line)}
+.row .info{flex:1;min-width:0}
+.row .nm{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.gone{opacity:.3}
+.row.gone .nm{text-decoration:line-through}
+.row.mine{background:rgba(245,197,24,.08);border-left:2px solid var(--hi);padding-left:6px}
+.row.dead{background:rgba(244,63,94,.09)}
+.btns{display:flex;gap:4px;flex:none}
+.b{appearance:none;border:1px solid var(--line);background:var(--card2);color:var(--mute);
+  font-family:var(--mono);font-size:9.5px;font-weight:700;padding:6px 8px;border-radius:5px;cursor:pointer}
+.b.on{background:var(--hi);color:#0D1015;border-color:var(--hi)}
+.b.x.on{background:#39424F;color:var(--ink);border-color:#39424F}
+.riskdot{color:#FB8C42;font-family:var(--mono);font-size:9px}
+.pknum{font-family:var(--mono);font-size:10px;font-weight:700;color:#6F7D8F;
+  background:#11161D;border:1px solid var(--line);border-radius:3px;padding:0 4px}
+.pknum.me{color:#0D1015;background:var(--hi);border-color:var(--hi)}
+.sortsep{font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:#4E5A69;
+  align-self:center;margin-left:6px;margin-right:1px}
+.sortb[aria-pressed=true]{background:var(--hi);color:#0D1015;border-color:var(--hi)}
+
+footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,16,21,.96);
+  border-top:1px solid var(--line);padding:9px 14px;backdrop-filter:blur(8px)}
+.fbar{max-width:660px;margin:0 auto;display:flex;gap:8px;align-items:center}
+.fbar .now{font-family:var(--mono);font-size:10.5px;color:var(--mute);flex:1;
+  display:flex;flex-direction:column;gap:1px;line-height:1.35}
+.fl1{color:var(--mute)} .fl2{color:var(--ink);font-size:11px}
+.fl2 .yo{color:var(--hi);letter-spacing:.06em}
+.mockb{border-color:#3C6E4A;color:#8FE3AB}
+.mockb:hover{background:rgba(74,222,128,.12)}
+.fbar .now b{color:var(--ink)}
+.gh{white-space:nowrap}
+.gh{appearance:none;border:1px solid var(--line);background:none;color:var(--mute);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;padding:8px 10px;border-radius:5px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <p class="eyebrow">SSTLV · 10 teams · full PPR · 17 spots</p>
+  <h1>Live draft <em>assistant</em></h1>
+</header>
+
+<section>
+  <p class="lbl">Your draft slot</p>
+  <div class="slots" id="slots"></div>
+  <div class="status">
+    <div class="stat" id="pickBox"><div class="k">On the clock</div><div class="v" id="curPick">1</div></div>
+    <div class="stat" id="mineBox"><div class="k">Your next pick</div><div class="v" id="nextPick">—</div></div>
+    <div class="stat"><div class="k">Roster</div><div class="v" id="cnt">0<span style="font-size:12px;color:var(--mute)">/17</span></div></div>
+  </div>
+  <p class="away" id="away"></p>
+</section>
+
+<section style="padding-top:0">
+  <div class="still" id="still"></div>
+  <div class="rec" id="recBox">
+    <div class="rhd" id="recHd">Recommended</div>
+    <div id="recList"></div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <p class="lbl">My roster</p>
+  <div class="roster" id="roster"></div>
+  <div class="rtot" id="rtot"></div>
+  <div id="warns"></div>
+</section>
+
+<section style="padding-top:0">
+  <p class="lbl">Not in the list? Add him to your roster</p>
+  <div class="tools" style="margin-bottom:14px">
+    <input type="search" id="addName" placeholder="Player name…">
+    <select id="addPos"><option>RB</option><option>WR</option><option>TE</option>
+      <option>QB</option><option>K</option><option>DST</option></select>
+    <button class="gh" id="addBtn" style="padding:10px 12px">ADD</button>
+  </div>
+  <p class="lbl">Player pool — tap X when someone else drafts them</p>
+  <div class="tools"><input type="search" id="q" placeholder="Search player or team…"></div>
+  <div class="filters" id="filters"></div>
+  <div id="list"></div>
+</section>
+</div>
+
+<footer><div class="fbar">
+  <div class="now" id="fnow"></div>
+  <button class="gh mockb" id="mock">MOCK</button>
+  <button class="gh" id="undo">UNDO</button>
+  <button class="gh" id="reset">RESET</button>
+</div></footer>
+
+<script>
+const PLAYERS =
+[{"n": "Bijan Robinson", "p": "RB", "t": "ATL", "b": 11, "a": 1.9, "e": 305, "v": 135, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +17 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 2}, {"n": "Jaxon Smith-Njigba", "p": "WR", "t": "SEA", "b": 11, "a": 5.4, "e": 282, "v": 110, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -7 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 5}, {"n": "Jahmyr Gibbs", "p": "RB", "t": "DET", "b": 6, "a": 1.6, "e": 280, "v": 110, "s": 4, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -29 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 1}, {"n": "Ja'Marr Chase", "p": "WR", "t": "CIN", "b": 6, "a": 3.9, "e": 268, "v": 96, "s": 4, "src": "P", "av": 0.95, "r": 1, "d": "2025 TD luck +8 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 3}, {"n": "Breece Hall", "p": "RB", "t": "NYJ", "b": 13, "a": 34.6, "e": 266, "v": 96, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +26 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 23}, {"n": "Puka Nacua", "p": "WR", "t": "LAR", "b": 11, "a": 3.1, "e": 267, "v": 95, "s": 3, "src": "P", "av": 0.89, "r": 1, "d": "2025 TD luck -11 pts vs volume; corrected. Under NFL review and dealing with soreness; may miss the Week 1 Australia game.", "method": "blend", "moved": false, "espn": 4}, {"n": "Amon-Ra St. Brown", "p": "WR", "t": "DET", "b": 6, "a": 6.3, "e": 259, "v": 87, "s": 2, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -11 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 8}, {"n": "De'Von Achane", "p": "RB", "t": "MIA", "b": 6, "a": 10.4, "e": 246, "v": 76, "s": 5, "src": "P", "av": 1.0, "r": 0, "d": "", "method": "blend", "moved": false, "espn": 10}, {"n": "Christian McCaffrey", "p": "RB", "t": "SF", "b": 8, "a": 6.6, "e": 244, "v": 74, "s": 2, "src": "P", "av": 0.91, "r": 1, "d": "413 touches last season at 30, with no usable depth behind him.", "method": "blend", "moved": false, "espn": 6}, {"n": "Ashton Jeanty", "p": "RB", "t": "LV", "b": 13, "a": 15.1, "e": 243, "v": 73, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +12 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 13}, {"n": "Drake London", "p": "WR", "t": "ATL", "b": 11, "a": 9.9, "e": 240, "v": 68, "s": 2, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -6 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 14}, {"n": "George Pickens", "p": "WR", "t": "DAL", "b": 14, "a": 19.8, "e": 238, "v": 66, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -10 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 32}, {"n": "Matthew Stafford", "p": "QB", "t": "LAR", "b": 11, "a": 77.2, "e": 346, "v": 64, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 86}, {"n": "Jonathan Taylor", "p": "RB", "t": "IND", "b": 13, "a": 7.5, "e": 234, "v": 64, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -37 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 7}, {"n": "Chase Brown", "p": "RB", "t": "CIN", "b": 6, "a": 13.4, "e": 234, "v": 64, "s": 2, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +4 pts vs volume; corrected. Unchallenged RB1 in Cincinnati; only Perine and Brooks behind him.", "method": "blend", "moved": false, "espn": 20}, {"n": "Jadarian Price", "p": "RB", "t": "SEA", "b": 11, "a": 79.1, "e": 229, "v": 59, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "Rookie, pick 32. Priced off the mean year-1 output of rookies drafted 16-35 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 62}, {"n": "Justin Jefferson", "p": "WR", "t": "MIN", "b": 6, "a": 11.7, "e": 229, "v": 57, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +26 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 11}, {"n": "Rashee Rice", "p": "WR", "t": "KC", "b": 5, "a": 14.8, "e": 228, "v": 56, "s": 2, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -10 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 16}, {"n": "CeeDee Lamb", "p": "WR", "t": "DAL", "b": 14, "a": 10.6, "e": 225, "v": 53, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +15 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 9}, {"n": "Brock Bowers", "p": "TE", "t": "LV", "b": 13, "a": 35.5, "e": 190, "v": 51, "s": 1, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -13 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 24}, {"n": "Bucky Irving", "p": "RB", "t": "TB", "b": 10, "a": 45.3, "e": 220, "v": 50, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +17 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 41}, {"n": "Chris Olave", "p": "WR", "t": "NO", "b": 8, "a": 20.2, "e": 219, "v": 47, "s": 2, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -5 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 26}, {"n": "D'Andre Swift", "p": "RB", "t": "CHI", "b": 10, "a": 45.8, "e": 213, "v": 43, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -3 pts vs volume; corrected. Clear RB1 in Chicago; Monangai questionable behind him.", "method": "model", "moved": false, "espn": 60}, {"n": "Trey McBride", "p": "TE", "t": "ARI", "b": 14, "a": 28.8, "e": 181, "v": 42, "s": 1, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -12 pts vs volume; corrected. Arizona is starting Jacoby Brissett at QB, not Kyler Murray.", "method": "blend", "moved": false, "espn": 17}, {"n": "Jeremiyah Love", "p": "RB", "t": "ARI", "b": 14, "a": 27.9, "e": 212, "v": 42, "s": 3, "src": "R", "av": 0.9, "r": 1, "d": "Rookie, pick 3. Priced off the mean year-1 output of rookies drafted 1-15 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 15}, {"n": "James Cook III", "p": "RB", "t": "BUF", "b": 7, "a": 12.7, "e": 208, "v": 38, "s": 4, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -11 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 12}, {"n": "Omarion Hampton", "p": "RB", "t": "LAC", "b": 7, "a": 23.2, "e": 206, "v": 36, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +4 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 22}, {"n": "Bo Nix", "p": "QB", "t": "DEN", "b": 10, "a": 112.7, "e": 317, "v": 35, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -12 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 84}, {"n": "Colston Loveland", "p": "TE", "t": "CHI", "b": 10, "a": 56.5, "e": 172, "v": 33, "s": 1, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -9 pts vs volume; corrected. Listed TE1 in Chicago over Cole Kmet.", "method": "blend", "moved": false, "espn": 49}, {"n": "Tyler Warren", "p": "TE", "t": "IND", "b": 13, "a": 64.9, "e": 171, "v": 32, "s": 1, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +4 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 50}, {"n": "Tetairoa McMillan", "p": "WR", "t": "CAR", "b": 5, "a": 32.9, "e": 204, "v": 32, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 33}, {"n": "Quinshon Judkins", "p": "RB", "t": "CLE", "b": 11, "a": 50.9, "e": 200, "v": 30, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +11 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 39}, {"n": "Nico Collins", "p": "WR", "t": "HOU", "b": 8, "a": 21.2, "e": 201, "v": 29, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 25}, {"n": "Kyle Pitts Sr.", "p": "TE", "t": "ATL", "b": 11, "a": 75.9, "e": 168, "v": 29, "s": 1, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +5 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 71}, {"n": "Rome Odunze", "p": "WR", "t": "CHI", "b": 10, "a": 51.4, "e": 201, "v": 29, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -7 pts vs volume; corrected. Listed WR1 in Chicago with Burden questionable.", "method": "model", "moved": false, "espn": 48}, {"n": "Saquon Barkley", "p": "RB", "t": "PHI", "b": 10, "a": 19.7, "e": 196, "v": 26, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +12 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 18}, {"n": "Zay Flowers", "p": "WR", "t": "BAL", "b": 13, "a": 25.2, "e": 197, "v": 25, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +1 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 34}, {"n": "Harold Fannin Jr.", "p": "TE", "t": "CLE", "b": 11, "a": 78.6, "e": 164, "v": 25, "s": 1, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -7 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 72}, {"n": "Emeka Egbuka", "p": "WR", "t": "TB", "b": 10, "a": 35.2, "e": 197, "v": 25, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 42}, {"n": "Jonathon Brooks", "p": "RB", "t": "CAR", "b": 5, "a": 101.8, "e": 194, "v": 24, "s": 3, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "adp", "moved": false, "espn": 99}, {"n": "Javonte Williams", "p": "RB", "t": "DAL", "b": 14, "a": 36.7, "e": 194, "v": 24, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -13 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 31}, {"n": "Kyren Williams", "p": "RB", "t": "LAR", "b": 11, "a": 31.5, "e": 193, "v": 23, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -12 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 38}, {"n": "Wan'Dale Robinson", "p": "WR", "t": "TEN", "b": 9, "a": 86.0, "e": 194, "v": 22, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +16 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 88}, {"n": "Jordan Addison", "p": "WR", "t": "MIN", "b": 6, "a": 97.8, "e": 194, "v": 22, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 89}, {"n": "Jared Goff", "p": "QB", "t": "DET", "b": 6, "a": 99.7, "e": 303, "v": 21, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 135}, {"n": "Drake Maye", "p": "QB", "t": "NE", "b": 11, "a": 51.6, "e": 303, "v": 21, "s": 13, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 57}, {"n": "Josh Allen", "p": "QB", "t": "BUF", "b": 7, "a": 33.7, "e": 302, "v": 20, "s": 25, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -54 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 36}, {"n": "Juwan Johnson", "p": "TE", "t": "NO", "b": 8, "a": 141.0, "e": 154, "v": 15, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +11 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 160}, {"n": "Caleb Williams", "p": "QB", "t": "CHI", "b": 10, "a": 89.3, "e": 297, "v": 15, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -7 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 87}, {"n": "Malik Nabers", "p": "WR", "t": "NYG", "b": 8, "a": 27.3, "e": 186, "v": 14, "s": 3, "src": "M", "av": 0.95, "r": 1, "d": "ACL recovery trending toward Week 1, but the ramp-up is real.", "method": "model", "moved": false, "espn": 29}, {"n": "Garrett Wilson", "p": "WR", "t": "NYJ", "b": 13, "a": 26.1, "e": 186, "v": 14, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -5 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 27}, {"n": "Jameson Williams", "p": "WR", "t": "DET", "b": 6, "a": 44.0, "e": 184, "v": 12, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -8 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 51}, {"n": "Carnell Tate", "p": "WR", "t": "TEN", "b": 9, "a": 75.5, "e": 183, "v": 11, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "Rookie, pick 4. Priced off the mean year-1 output of rookies drafted 1-15 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 54}, {"n": "Jordyn Tyson", "p": "WR", "t": "NO", "b": 8, "a": 120.1, "e": 183, "v": 11, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "Rookie, pick 8. Priced off the mean year-1 output of rookies drafted 1-15 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 152}, {"n": "Ladd McConkey", "p": "WR", "t": "LAC", "b": 7, "a": 37.7, "e": 182, "v": 10, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 44}, {"n": "Travis Kelce", "p": "TE", "t": "KC", "b": 5, "a": 109.0, "e": 148, "v": 9, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 104}, {"n": "Kenneth Walker", "p": "RB", "t": "KC", "b": 5, "a": 22.2, "e": 179, "v": 9, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck +20 pts vs volume; corrected. ", "method": "blend", "moved": true, "espn": 21}, {"n": "A.J. Brown", "p": "WR", "t": "NE", "b": 11, "a": 18.2, "e": 180, "v": 8, "s": 3, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. ", "method": "blend", "moved": true, "espn": 28}, {"n": "Cam Skattebo", "p": "RB", "t": "NYG", "b": 8, "a": 36.4, "e": 176, "v": 6, "s": 3, "src": "M", "av": 0.94, "r": 1, "d": "2025 TD luck -11 pts vs volume; corrected. Back from the leg injury but sharing the top of the depth chart.", "method": "model", "moved": false, "espn": 40}, {"n": "DeVonta Smith", "p": "WR", "t": "PHI", "b": 10, "a": 29.6, "e": 177, "v": 5, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +9 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 35}, {"n": "Justin Herbert", "p": "QB", "t": "LAC", "b": 7, "a": 105.8, "e": 287, "v": 5, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 93}, {"n": "Parker Washington", "p": "WR", "t": "JAX", "b": 7, "a": 64.7, "e": 177, "v": 5, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 69}, {"n": "Quentin Johnston", "p": "WR", "t": "LAC", "b": 7, "a": 94.7, "e": 177, "v": 5, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -18 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 112}, {"n": "Derrick Henry", "p": "RB", "t": "BAL", "b": 13, "a": 17.6, "e": 173, "v": 3, "s": 4, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -27 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 19}, {"n": "Seattle", "p": "DST", "t": "SEA", "b": 11, "a": 82.9, "e": 117, "v": 3.0, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Jalen Hurts", "p": "QB", "t": "PHI", "b": 10, "a": 79.7, "e": 285, "v": 3, "s": 9, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -24 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 58}, {"n": "Jaylen Warren", "p": "RB", "t": "PIT", "b": 9, "a": 59.0, "e": 173, "v": 3, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +5 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 95}, {"n": "Denver", "p": "DST", "t": "DEN", "b": 10, "a": 88.4, "e": 115, "v": 2.6, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Houston", "p": "DST", "t": "HOU", "b": 8, "a": 97.3, "e": 113, "v": 2.2, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Minnesota", "p": "DST", "t": "MIN", "b": 6, "a": 108.2, "e": 110, "v": 1.6, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Los Angeles Rams", "p": "DST", "t": "LAR", "b": 11, "a": 108.9, "e": 110, "v": 1.6, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Brandon Aubrey", "p": "K", "t": "DAL", "b": 14, "a": 130.0, "e": 145, "v": 1.4, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Jason Myers", "p": "K", "t": "SEA", "b": 11, "a": 138.3, "e": 143, "v": 1.0, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Jordan Love", "p": "QB", "t": "GB", "b": 11, "a": 146.3, "e": 283, "v": 1, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +8 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": null}, {"n": "Ka'imi Fairbairn", "p": "K", "t": "HOU", "b": 8, "a": 142.2, "e": 142, "v": 0.8, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Cameron Dicker", "p": "K", "t": "LAC", "b": 7, "a": 142.9, "e": 142, "v": 0.8, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "New England", "p": "DST", "t": "NE", "b": 11, "a": 127.8, "e": 106, "v": 0.8, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Detroit", "p": "DST", "t": "DET", "b": 6, "a": 128.9, "e": 105, "v": 0.6, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Jake Bates", "p": "K", "t": "DET", "b": 6, "a": 146.8, "e": 141, "v": 0.6, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Pittsburgh", "p": "DST", "t": "PIT", "b": 9, "a": 132.4, "e": 104, "v": 0.4, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Cam Little", "p": "K", "t": "JAX", "b": 7, "a": 153.1, "e": 139, "v": 0.2, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Tyler Loop", "p": "K", "t": "BAL", "b": 13, "a": 154.1, "e": 139, "v": 0.2, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Philadelphia", "p": "DST", "t": "PHI", "b": 10, "a": 139.1, "e": 103, "v": 0.2, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Dak Prescott", "p": "QB", "t": "DAL", "b": 14, "a": 65.3, "e": 282, "v": 0, "s": 30, "src": "P", "av": 1.0, "r": 0, "d": "", "method": "blend", "moved": false, "espn": 83}, {"n": "Tucker Kraft", "p": "TE", "t": "GB", "b": 11, "a": 102.0, "e": 139, "v": 0, "s": 1, "src": "P", "av": 0.92, "r": 1, "d": "2025 TD luck -19 pts vs volume; corrected. ACL return; may or may not be ready for Week 1.", "method": "blend", "moved": false, "espn": 101}, {"n": "J.K. Dobbins", "p": "RB", "t": "DEN", "b": 10, "a": 91.5, "e": 170, "v": 0, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +8 pts vs volume; corrected. Listed RB1 in Denver ahead of RJ Harvey and Jonah Coleman.", "method": "model", "moved": false, "espn": 105}, {"n": "Chris Boswell", "p": "K", "t": "PIT", "b": 9, "a": 157.2, "e": 138, "v": 0.0, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Los Angeles Chargers", "p": "DST", "t": "LAC", "b": 7, "a": 142.6, "e": 102, "v": 0.0, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Harrison Butker", "p": "K", "t": "KC", "b": 5, "a": 159.3, "e": 138, "v": 0.0, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Wil Lutz", "p": "K", "t": "DEN", "b": 10, "a": 159.4, "e": 138, "v": 0.0, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Sam LaPorta", "p": "TE", "t": "DET", "b": 6, "a": 96.0, "e": 139, "v": 0, "s": 1, "src": "P", "av": 0.93, "r": 1, "d": "Week 1 status still uncertain.", "method": "blend", "moved": false, "espn": 73}, {"n": "Brian Thomas Jr.", "p": "WR", "t": "JAX", "b": 7, "a": 72.1, "e": 172, "v": 0, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +8 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 80}, {"n": "Will Reichard", "p": "K", "t": "MIN", "b": 6, "a": 162.7, "e": 137, "v": -0.2, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Evan McPherson", "p": "K", "t": "CIN", "b": 6, "a": 168.6, "e": 135, "v": -0.6, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Green Bay", "p": "DST", "t": "GB", "b": 11, "a": 154.8, "e": 99, "v": -0.6, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Jacksonville", "p": "DST", "t": "JAX", "b": 7, "a": 156.6, "e": 98, "v": -0.8, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Cleveland", "p": "DST", "t": "CLE", "b": 11, "a": 159.6, "e": 98, "v": -0.8, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Buffalo", "p": "DST", "t": "BUF", "b": 7, "a": 160.0, "e": 98, "v": -0.8, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Michael Wilson", "p": "WR", "t": "ARI", "b": 14, "a": 76.3, "e": 171, "v": -1, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 79}, {"n": "Baltimore", "p": "DST", "t": "BAL", "b": 13, "a": 163.5, "e": 97, "v": -1.0, "s": 0, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "flat", "espn": null}, {"n": "Younghoe Koo", "p": "K", "t": "ATL", "b": 11, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Justin Tucker", "p": "K", "t": "BAL", "b": 13, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Matt Gay", "p": "K", "t": "IND", "b": 13, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Tyler Bass", "p": "K", "t": "BUF", "b": 7, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Joey Slye", "p": "K", "t": "NE", "b": 11, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Jake Elliott", "p": "K", "t": "PHI", "b": 10, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Greg Zuerlein", "p": "K", "t": "NYJ", "b": 13, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Chase McLaughlin", "p": "K", "t": "TB", "b": 10, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Matt Prater", "p": "K", "t": "ARI", "b": 14, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Blake Grupe", "p": "K", "t": "NO", "b": 8, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Eddy Pineiro", "p": "K", "t": "SF", "b": 8, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Nick Folk", "p": "K", "t": "TEN", "b": 9, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Riley Patterson", "p": "K", "t": "DET", "b": 6, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Michael Badgley", "p": "K", "t": "CHI", "b": 10, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Cairo Santos", "p": "K", "t": "CHI", "b": 10, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Anders Carlson", "p": "K", "t": "NYJ", "b": 13, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Dustin Hopkins", "p": "K", "t": "CLE", "b": 11, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Matt Ammendola", "p": "K", "t": "LV", "b": 13, "a": 190, "e": 132, "v": -1.2, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Kicker scoring is close to random week to week \u2014 leg strength and a good offense are the only edges.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Arizona", "p": "DST", "t": "ARI", "b": 14, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Atlanta", "p": "DST", "t": "ATL", "b": 11, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Carolina", "p": "DST", "t": "CAR", "b": 5, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Chicago", "p": "DST", "t": "CHI", "b": 10, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Cincinnati", "p": "DST", "t": "CIN", "b": 6, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Dallas", "p": "DST", "t": "DAL", "b": 14, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Indianapolis", "p": "DST", "t": "IND", "b": 13, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Las Vegas", "p": "DST", "t": "LV", "b": 13, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Miami", "p": "DST", "t": "MIA", "b": 6, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "New Orleans", "p": "DST", "t": "NO", "b": 8, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "New York Giants", "p": "DST", "t": "NYG", "b": 8, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "New York Jets", "p": "DST", "t": "NYJ", "b": 13, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "San Francisco", "p": "DST", "t": "SF", "b": 8, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Tampa Bay", "p": "DST", "t": "TB", "b": 10, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Tennessee", "p": "DST", "t": "TEN", "b": 9, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "Washington", "p": "DST", "t": "WAS", "b": 7, "a": 185, "e": 92, "v": -2.0, "s": 0, "src": "E", "r": 0, "d": "Streaming option. Defenses are near-interchangeable week to week \u2014 take the best matchup.", "av": 1.0, "method": "flat", "espn": null}, {"n": "TreVeyon Henderson", "p": "RB", "t": "NE", "b": 11, "a": 60.7, "e": 168, "v": -2, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -12 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 63}, {"n": "Makai Lemon", "p": "WR", "t": "PHI", "b": 10, "a": 115.9, "e": 169, "v": -3, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "Rookie, pick 20. Priced off the mean year-1 output of rookies drafted 16-35 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 125}, {"n": "KC Concepcion", "p": "WR", "t": "CLE", "b": 11, "a": 120.9, "e": 169, "v": -3, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "Rookie, pick 24. Priced off the mean year-1 output of rookies drafted 16-35 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 126}, {"n": "De'Zhaun Stribling", "p": "WR", "t": "SF", "b": 8, "a": 138.8, "e": 169, "v": -3, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "Rookie, pick 33. Priced off the mean year-1 output of rookies drafted 16-35 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 129}, {"n": "Lamar Jackson", "p": "QB", "t": "BAL", "b": 13, "a": 56.7, "e": 278, "v": -4, "s": 33, "src": "P", "av": 1.0, "r": 0, "d": "", "method": "blend", "moved": false, "espn": 56}, {"n": "Tyrone Tracy Jr.", "p": "RB", "t": "NYG", "b": 8, "a": 151.1, "e": 166, "v": -4, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +21 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": null}, {"n": "Jake Ferguson", "p": "TE", "t": "DAL", "b": 14, "a": 133.6, "e": 133, "v": -6, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -14 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 109}, {"n": "George Kittle", "p": "TE", "t": "SF", "b": 8, "a": 117.9, "e": 132, "v": -7, "s": 1, "src": "P", "av": 0.9, "r": 1, "d": "2025 TD luck -17 pts vs volume; corrected. Achilles/PUP and a long injury history.", "method": "blend", "moved": false, "espn": 102}, {"n": "Tee Higgins", "p": "WR", "t": "CIN", "b": 6, "a": 36.2, "e": 164, "v": -8, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -30 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 46}, {"n": "Dallas Goedert", "p": "TE", "t": "PHI", "b": 10, "a": 105.3, "e": 131, "v": -8, "s": 1, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -34 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 103}, {"n": "Rico Dowdle", "p": "RB", "t": "PIT", "b": 9, "a": 74.9, "e": 159, "v": -11, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +15 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 96}, {"n": "Trevor Lawrence", "p": "QB", "t": "JAX", "b": 7, "a": 92.2, "e": 270, "v": -12, "s": 12, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -33 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 82}, {"n": "Tre Tucker", "p": "WR", "t": "LV", "b": 13, "a": 132.2, "e": 160, "v": -12, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 153}, {"n": "Alec Pierce", "p": "WR", "t": "IND", "b": 13, "a": 63.2, "e": 158, "v": -14, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -9 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 70}, {"n": "Tony Pollard", "p": "RB", "t": "TEN", "b": 9, "a": 68.4, "e": 156, "v": -14, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +24 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 97}, {"n": "Tyjae Spears", "p": "RB", "t": "TEN", "b": 9, "a": 131.5, "e": 156, "v": -14, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +14 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 139}, {"n": "Courtland Sutton", "p": "WR", "t": "DEN", "b": 10, "a": 60.3, "e": 156, "v": -16, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. Still Denver's WR1 with Waddle slotted second.", "method": "model", "moved": false, "espn": 65}, {"n": "Travis Etienne Jr.", "p": "RB", "t": "NO", "b": 8, "a": 40.7, "e": 154, "v": -16, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -10 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 37}, {"n": "Jakobi Meyers", "p": "WR", "t": "JAX", "b": 7, "a": 88.5, "e": 154, "v": -18, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +14 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 81}, {"n": "Dalton Kincaid", "p": "TE", "t": "BUF", "b": 7, "a": 149.8, "e": 121, "v": -18, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -12 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 117}, {"n": "Kenny Gainwell", "p": "RB", "t": "TB", "b": 10, "a": 91.0, "e": 152, "v": -18, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": true, "espn": 98}, {"n": "Khalil Shakir", "p": "WR", "t": "BUF", "b": 7, "a": 100.7, "e": 153, "v": -19, "s": 3, "src": "M", "av": 0.94, "r": 1, "d": "2025 TD luck +4 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 90}, {"n": "DK Metcalf", "p": "WR", "t": "PIT", "b": 9, "a": 64.8, "e": 151, "v": -21, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -10 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 68}, {"n": "Kyle Monangai", "p": "RB", "t": "CHI", "b": 10, "a": 110.8, "e": 149, "v": -21, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +10 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 106}, {"n": "Christian Watson", "p": "WR", "t": "GB", "b": 11, "a": 58.7, "e": 150, "v": -22, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -16 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 77}, {"n": "Davante Adams", "p": "WR", "t": "LAR", "b": 11, "a": 41.8, "e": 150, "v": -22, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -41 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 43}, {"n": "Jayden Daniels", "p": "QB", "t": "WAS", "b": 7, "a": 71.9, "e": 260, "v": -22, "s": 2, "src": "P", "av": 1.0, "r": 0, "d": "", "method": "blend", "moved": false, "espn": 55}, {"n": "Xavier Worthy", "p": "WR", "t": "KC", "b": 5, "a": 106.3, "e": 150, "v": -22, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +15 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 92}, {"n": "Josh Downs", "p": "WR", "t": "IND", "b": 13, "a": 83.9, "e": 150, "v": -22, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 113}, {"n": "Joe Burrow", "p": "QB", "t": "CIN", "b": 6, "a": 57.4, "e": 259, "v": -23, "s": 25, "src": "P", "av": 1.0, "r": 0, "d": "", "method": "blend", "moved": false, "espn": 74}, {"n": "Jonah Coleman", "p": "RB", "t": "DEN", "b": 10, "a": 156.8, "e": 146, "v": -24, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "", "method": "rookie-capital", "moved": false, "espn": 156}, {"n": "Woody Marks", "p": "RB", "t": "HOU", "b": 8, "a": 142.9, "e": 146, "v": -24, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +16 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 123}, {"n": "Jaxson Dart", "p": "QB", "t": "NYG", "b": 8, "a": 117.8, "e": 257, "v": -25, "s": -4, "src": "P", "av": 1.0, "r": 0, "d": "2025 TD luck -33 pts vs volume; corrected. ", "method": "blend", "moved": false, "espn": 75}, {"n": "C.J. Stroud", "p": "QB", "t": "HOU", "b": 8, "a": 158.7, "e": 257, "v": -25, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": null}, {"n": "Baker Mayfield", "p": "QB", "t": "TB", "b": 10, "a": 129.3, "e": 254, "v": -28, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +4 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 149}, {"n": "Jerry Jeudy", "p": "WR", "t": "CLE", "b": 11, "a": 126.4, "e": 144, "v": -28, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +17 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 144}, {"n": "Tank Dell", "p": "WR", "t": "HOU", "b": 8, "a": 157.2, "e": 143, "v": -29, "s": 3, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "adp", "moved": false, "espn": 130}, {"n": "Rhamondre Stevenson", "p": "RB", "t": "NE", "b": 11, "a": 68.9, "e": 141, "v": -29, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -16 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 64}, {"n": "T.J. Hockenson", "p": "TE", "t": "MIN", "b": 6, "a": 166.9, "e": 109, "v": -30, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +2 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 111}, {"n": "Travis Hunter", "p": "WR", "t": "JAX", "b": 7, "a": 164.6, "e": 141, "v": -31, "s": 3, "src": "E", "av": 1.0, "r": 0, "d": "", "method": "adp", "moved": false, "espn": 151}, {"n": "Brock Purdy", "p": "QB", "t": "SF", "b": 8, "a": 88.4, "e": 250, "v": -32, "s": 12, "src": "P", "av": 1.0, "r": 0, "d": "", "method": "blend", "moved": false, "espn": 85}, {"n": "Josh Jacobs", "p": "RB", "t": "GB", "b": 11, "a": 30.9, "e": 138, "v": -32, "s": 3, "src": "M", "av": 0.76, "r": 1, "d": "2025 TD luck -23 pts vs volume; corrected. Under NFL review after a May arrest; investigation open, no charges filed.", "method": "model", "moved": false, "espn": 30}, {"n": "Sam Darnold", "p": "QB", "t": "SEA", "b": 11, "a": 141.4, "e": 249, "v": -33, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": null}, {"n": "Mark Andrews", "p": "TE", "t": "BAL", "b": 13, "a": 128.8, "e": 104, "v": -35, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -11 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 110}, {"n": "Marvin Harrison Jr.", "p": "WR", "t": "ARI", "b": 14, "a": 66.1, "e": 135, "v": -37, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -2 pts vs volume; corrected. Same Brissett downgrade, and he is the outside WR not the target hog.", "method": "model", "moved": false, "espn": 67}, {"n": "Rashid Shaheed", "p": "WR", "t": "SEA", "b": 11, "a": 128.5, "e": 132, "v": -40, "s": 3, "src": "M", "av": 0.95, "r": 1, "d": "2025 TD luck +15 pts vs volume; corrected. Minor camp issue.", "method": "model", "moved": false, "espn": 132}, {"n": "Chimere Dike", "p": "WR", "t": "TEN", "b": 9, "a": 155.2, "e": 132, "v": -40, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": null}, {"n": "Terry McLaurin", "p": "WR", "t": "WAS", "b": 7, "a": 46.7, "e": 128, "v": -44, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 45}, {"n": "Alvin Kamara", "p": "RB", "t": "NO", "b": 8, "a": 143.1, "e": 126, "v": -44, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +26 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 138}, {"n": "Michael Pittman Jr.", "p": "WR", "t": "PIT", "b": 9, "a": 74.6, "e": 127, "v": -45, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -7 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 66}, {"n": "Luther Burden III", "p": "WR", "t": "CHI", "b": 10, "a": 59.3, "e": 124, "v": -48, "s": 3, "src": "M", "av": 0.85, "r": 1, "d": "2025 TD luck +6 pts vs volume; corrected. Groin; missed the preseason, Bears expect a slow start.", "method": "model", "moved": false, "espn": 53}, {"n": "Keenan Allen", "p": "WR", "t": "IND", "b": 13, "a": 130.1, "e": 124, "v": -48, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +11 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": null}, {"n": "Ricky Pearsall", "p": "WR", "t": "--", "b": 0, "a": 130, "e": 122, "v": -50, "s": 0, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +14 pts vs volume; corrected. PCL surgery, OUT for 2026.", "method": "model", "moved": true, "espn": null}, {"n": "Jalen Coker", "p": "WR", "t": "CAR", "b": 5, "a": 121.1, "e": 122, "v": -50, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 131}, {"n": "Stefon Diggs", "p": "WR", "t": "WAS", "b": 7, "a": 91.2, "e": 121, "v": -51, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +6 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 124}, {"n": "RJ Harvey", "p": "RB", "t": "DEN", "b": 10, "a": 86.0, "e": 119, "v": -51, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -23 pts vs volume; corrected. Listed RB2 in Denver behind Dobbins.", "method": "model", "moved": false, "espn": 122}, {"n": "Jaylen Waddle", "p": "WR", "t": "DEN", "b": 10, "a": 46.0, "e": 120, "v": -52, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. Listed WR2 in Denver behind Sutton - a real role cut from his Miami WR1 job.", "method": "model", "moved": true, "espn": 47}, {"n": "Jayden Reed", "p": "WR", "t": "GB", "b": 11, "a": 94.3, "e": 120, "v": -52, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 91}, {"n": "Jacory Croskey-Merritt", "p": "RB", "t": "WAS", "b": 7, "a": 117.3, "e": 118, "v": -52, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -10 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 107}, {"n": "Rachaad White", "p": "RB", "t": "WAS", "b": 7, "a": 109.1, "e": 118, "v": -52, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +12 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 108}, {"n": "Jordan Mason", "p": "RB", "t": "MIN", "b": 6, "a": 119.3, "e": 115, "v": -55, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 120}, {"n": "David Montgomery", "p": "RB", "t": "HOU", "b": 8, "a": 58.4, "e": 114, "v": -56, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -8 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 61}, {"n": "Aaron Jones Sr.", "p": "RB", "t": "MIN", "b": 6, "a": 101.6, "e": 114, "v": -56, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +17 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 115}, {"n": "Deebo Samuel Sr.", "p": "WR", "t": "SF", "b": 8, "a": 112.4, "e": 116, "v": -56, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -2 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 114}, {"n": "Romeo Doubs", "p": "WR", "t": "NE", "b": 11, "a": 113.7, "e": 115, "v": -57, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -8 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 128}, {"n": "David Njoku", "p": "TE", "t": "LAC", "b": 7, "a": 136.0, "e": 80, "v": -59, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -8 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": null}, {"n": "Chuba Hubbard", "p": "RB", "t": "CAR", "b": 5, "a": 78.5, "e": 111, "v": -59, "s": 3, "src": "M", "av": 0.82, "r": 1, "d": "2025 TD luck +12 pts vs volume; corrected. Hamstring, week-to-week, and now behind Brooks.", "method": "model", "moved": false, "espn": 100}, {"n": "Matthew Golden", "p": "WR", "t": "GB", "b": 11, "a": 105.9, "e": 112, "v": -60, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +13 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 78}, {"n": "Chris Godwin Jr.", "p": "WR", "t": "TB", "b": 10, "a": 80.4, "e": 111, "v": -61, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 127}, {"n": "Isaiah Likely", "p": "TE", "t": "NYG", "b": 8, "a": 136.7, "e": 77, "v": -62, "s": 1, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": true, "espn": 116}, {"n": "Denzel Boston", "p": "WR", "t": "CLE", "b": 11, "a": 140.2, "e": 109, "v": -63, "s": 3, "src": "R", "av": 1.0, "r": 0, "d": "Rookie, pick 39. Priced off the mean year-1 output of rookies drafted 36-70 since 2019, not an extrapolated curve.", "method": "rookie-empirical", "moved": false, "espn": 143}, {"n": "Jaylen Wright", "p": "RB", "t": "MIA", "b": 6, "a": 175, "e": 106, "v": -64, "s": 0, "src": "M", "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. Miami depth; shares the backfield if Achane misses time.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "Malik Washington", "p": "WR", "t": "MIA", "b": 6, "a": 148.4, "e": 106, "v": -66, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": null}, {"n": "DJ Moore", "p": "WR", "t": "BUF", "b": 7, "a": 48.9, "e": 105, "v": -67, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -11 pts vs volume; corrected. Listed WR1 in Buffalo ahead of Shakir and Coleman.", "method": "model", "moved": true, "espn": 52}, {"n": "Keaton Mitchell", "p": "RB", "t": "BAL", "b": 13, "a": 182, "e": 103, "v": -67, "s": 0, "src": "M", "r": 0, "d": "2025 TD luck +8 pts vs volume; corrected. Explosive change-of-pace back behind Henry.", "av": 1.0, "method": "model", "moved": false, "espn": 154}, {"n": "Jalen McMillan", "p": "WR", "t": "TB", "b": 10, "a": 136.4, "e": 104, "v": -68, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 145}, {"n": "Blake Corum", "p": "RB", "t": "LAR", "b": 11, "a": 120.2, "e": 102, "v": -68, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -4 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 121}, {"n": "Tyler Shough", "p": "QB", "t": "NO", "b": 8, "a": 134.6, "e": 209, "v": -73, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -8 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 134}, {"n": "Emanuel Wilson", "p": "RB", "t": "GB", "b": 11, "a": 184, "e": 97, "v": -73, "s": 0, "src": "M", "r": 0, "d": "2025 TD luck +9 pts vs volume; corrected. Green Bay depth.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "Jayden Higgins", "p": "WR", "t": "--", "b": 0, "a": 130, "e": 98, "v": -74, "s": 0, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -13 pts vs volume; corrected. Torn ACL, OUT for 2026. Still carries an ADP near 130 because the market hasn't updated. Do not draft.", "method": "model", "moved": true, "espn": null}, {"n": "Sincere McCormick", "p": "RB", "t": "LV", "b": 13, "a": 180, "e": 96, "v": -74, "s": 0, "src": "E", "r": 0, "d": "Handcuff to Ashton Jeanty.", "av": 1.0, "method": "adp", "moved": false, "espn": null}, {"n": "Ollie Gordon II", "p": "RB", "t": "MIA", "b": 6, "a": 168, "e": 90, "v": -80, "s": 0, "src": "M", "r": 0, "d": "2025 TD luck -7 pts vs volume; corrected. Miami's early-down back behind Achane \u2014 the direct handcuff.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "Cooper Kupp", "p": "WR", "t": "SEA", "b": 11, "a": 151.5, "e": 91, "v": -81, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +8 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": null}, {"n": "Mike Evans", "p": "WR", "t": "SF", "b": 8, "a": 53.6, "e": 91, "v": -81, "s": 3, "src": "M", "av": 0.9, "r": 1, "d": "Quad in camp, and he turns 33.", "method": "model", "moved": true, "espn": 76}, {"n": "Kendre Miller", "p": "RB", "t": "NO", "b": 8, "a": 178, "e": 88, "v": -82, "s": 0, "src": "M", "r": 0, "d": "2025 TD luck +4 pts vs volume; corrected. New Orleans depth behind Etienne.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "Isiah Pacheco", "p": "RB", "t": "DET", "b": 6, "a": 155.9, "e": 87, "v": -83, "s": 3, "src": "M", "av": 0.9, "r": 1, "d": "2025 TD luck +16 pts vs volume; corrected. MCL sprain in camp.", "method": "model", "moved": true, "espn": 155}, {"n": "Patrick Mahomes", "p": "QB", "t": "KC", "b": 5, "a": 101.9, "e": 197, "v": -85, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -15 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 94}, {"n": "Tyler Allgeier", "p": "RB", "t": "ARI", "b": 14, "a": 154.8, "e": 85, "v": -85, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -14 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 142}, {"n": "Bhayshul Tuten", "p": "RB", "t": "JAX", "b": 7, "a": 52.9, "e": 84, "v": -86, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck -19 pts vs volume; corrected. ", "method": "model", "moved": false, "espn": 59}, {"n": "Jaylin Noel", "p": "WR", "t": "HOU", "b": 8, "a": 165.9, "e": 85, "v": -87, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": null}, {"n": "James Conner", "p": "RB", "t": "ARI", "b": 14, "a": 160.3, "e": 82, "v": -88, "s": 3, "src": "M", "av": 0.88, "r": 1, "d": "Limited in recovery from foot surgery.", "method": "model", "moved": false, "espn": null}, {"n": "Kyler Murray", "p": "QB", "t": "MIN", "b": 6, "a": 133.3, "e": 192, "v": -90, "s": 16, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": true, "espn": 133}, {"n": "Calvin Ridley", "p": "WR", "t": "TEN", "b": 9, "a": 144.2, "e": 80, "v": -92, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": 146}, {"n": "Braelon Allen", "p": "RB", "t": "NYJ", "b": 13, "a": 170, "e": 75, "v": -95, "s": 0, "src": "M", "r": 0, "d": "Handcuff to Breece Hall.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "Brian Robinson", "p": "RB", "t": "ATL", "b": 11, "a": 162.4, "e": 69, "v": -101, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "2025 TD luck +8 pts vs volume; corrected. ", "method": "model", "moved": true, "espn": 141}, {"n": "Rashod Bateman", "p": "WR", "t": "BAL", "b": 13, "a": 149.6, "e": 69, "v": -103, "s": 3, "src": "M", "av": 1.0, "r": 0, "d": "", "method": "model", "moved": false, "espn": null}, {"n": "Tank Bigsby", "p": "RB", "t": "JAX", "b": 7, "a": 176, "e": 67, "v": -103, "s": 0, "src": "M", "r": 0, "d": "Jacksonville depth behind Tuten.", "av": 1.0, "method": "model", "moved": true, "espn": 157}, {"n": "Ray Davis", "p": "RB", "t": "BUF", "b": 7, "a": 172, "e": 62, "v": -108, "s": 0, "src": "M", "r": 0, "d": "2025 TD luck +3 pts vs volume; corrected. Handcuff to James Cook.", "av": 1.0, "method": "model", "moved": false, "espn": 158}, {"n": "Will Shipley", "p": "RB", "t": "PHI", "b": 10, "a": 179, "e": 58, "v": -112, "s": 0, "src": "M", "r": 0, "d": "Handcuff to Saquon Barkley.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "DJ Giddens", "p": "RB", "t": "IND", "b": 13, "a": 177, "e": 55, "v": -115, "s": 0, "src": "M", "r": 0, "d": "Handcuff to Jonathan Taylor.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "Zach Charbonnet", "p": "RB", "t": "SEA", "b": 11, "a": 135.7, "e": 34, "v": -136, "s": 3, "src": "M", "av": 0.25, "r": 1, "d": "2025 TD luck -26 pts vs volume; corrected. Torn ACL, opened camp on PUP, no timetable.", "method": "model", "moved": false, "espn": 137}, {"n": "Isaac Guerendo", "p": "RB", "t": "SF", "b": 8, "a": 174, "e": 8, "v": -162, "s": 0, "src": "M", "r": 0, "d": "Handcuff to McCaffrey, who carried 413 touches last year.", "av": 1.0, "method": "model", "moved": false, "espn": null}, {"n": "Brandon Aiyuk", "p": "WR", "t": "SF", "b": 8, "a": 156.8, "e": 6, "v": -166, "s": 3, "src": "E", "av": 0.05, "r": 1, "d": "Working back; role not guaranteed.", "method": "adp", "moved": false, "espn": null}]// Tunable weights. These were previously hardcoded from intuition; they are now
+// optimised against simulated championship rate (see optimise.js).
+var CFG = (typeof CFG_OVERRIDE!=='undefined') ? CFG_OVERRIDE : {"bye2": 14, "bye3": 26, "bye4": 70, "byeAll": 5, "byeNoCover": 7, "byeCover": 9, "reachFree": 8, "reachRate": 0.6, "cuffMult": 0.45, "cuffTop": 70, "cuff": 40, "conc": 10, "stack": 7, "dropMin": 10, "dropMult": 0.55, "dropCap": 30, "runCap": 22, "runRate": 45, "coldPen": 8, "scarMin": 6, "scarMax": 48, "benchWR": 12, "benchRB": 6, "rb5pen": 14};
+;
+const TEAMS=10, ROUNDS=15;
+const SLOTS=[["QB",["QB"]],["WR",["WR"]],["WR",["WR"]],["RB",["RB"]],["RB",["RB"]],
+             ["TE",["TE"]],["W/R/T",["WR","RB","TE"]],["K",["K"]],["DEF",["DST"]],
+             ["BN",null],["BN",null],["BN",null],["BN",null],["BN",null],["BN",null]];
+
+let slot=null, gone=new Set(), mine=[], hist=[], filter="ALL", query="", takenAt={}, goneAt={}, sortMode="value";
+
+const byName=Object.fromEntries(PLAYERS.map(p=>[p.n,p]));
+const myPicks=()=>slot?Array.from({length:ROUNDS},(_,i)=>{const r=i+1;
+  return r%2?(r-1)*TEAMS+slot:r*TEAMS-slot+1;}):[];
+const curPick=()=>gone.size+mine.length+1;
+const nextMine=()=>myPicks().find(n=>n>=curPick());
+const isMyTurn=()=>slot&&nextMine()===curPick();
+
+// ---- roster shape ----
+function fillRoster(){
+  const board=SLOTS.map(([c,ok])=>({code:c,ok,who:null}));
+  const pool=mine.map(n=>byName[n]).filter(Boolean).sort((a,b)=>b.v-a.v);
+  const used=new Set();
+  // dedicated slots first, best eligible player into each
+  board.forEach(s=>{ if(!s.ok||s.ok.length!==1) return;
+    const hit=pool.find(p=>!used.has(p.n)&&s.ok.includes(p.p));
+    if(hit){s.who=hit;used.add(hit.n);} });
+  // then the flex. All eligible players compete for one slot, so compare raw
+  // projected points here — VOR would favour a TE purely because TEs are scarce.
+  board.forEach(s=>{ if(!s.ok||s.ok.length===1) return;
+    const elig=pool.filter(p=>!used.has(p.n)&&s.ok.includes(p.p))
+                   .sort((a,b)=>(b.e+(b.p==="TE"?-8:0))-(a.e+(a.p==="TE"?-8:0)));
+    const hit=elig[0];
+    if(hit){s.who=hit;used.add(hit.n);} });
+  // bench
+  board.forEach(s=>{ if(s.ok) return;
+    const hit=pool.find(p=>!used.has(p.n));
+    if(hit){s.who=hit;used.add(hit.n);} });
+  return board;
+}
+const countPos=p=>mine.filter(n=>byName[n]&&byName[n].p===p).length;
+
+// ---- live board reading ----
+// Every player has a board rank (the ESPN sheet where we have it, ADP otherwise).
+// As picks come in we measure whether a position is going FASTER than that board
+// implies, and pull its expected availability forward accordingly.
+function boardRank(p){ return p.espn || p.a; }
+
+function pace(){
+  const pick=curPick();
+  if(pick<20) return {QB:1,RB:1,WR:1,TE:1,K:1,DST:1};
+  const taken={},expected={};
+  for(const q of PLAYERS){
+    if(q.v<=-90) continue;
+    const isGone=gone.has(q.n)||mine.includes(q.n);
+    taken[q.p]=(taken[q.p]||0)+(isGone?1:0);
+    // how many at this position "should" be gone by now
+    expected[q.p]=(expected[q.p]||0)+(boardRank(q)<pick?1:0);
+  }
+  const out={};
+  for(const pos in taken){
+    const e=Math.max(expected[pos]||0,1), t=taken[pos]||0;
+    out[pos]=Math.max(0.6,Math.min(1.45,t/e));  // >1 hot; capped so a run
+                                                // discounts reach, never erases it
+  }
+  return out;
+}
+
+// Probability a player is still there at pick N, given the live pace.
+function survives(p,N,pc){
+  const hot=pc[p.p]||1;
+  const eff=boardRank(p)/hot;                   // hot position => effectively earlier
+  const sd=Math.max(4,eff*0.16);
+  return 1/(1+Math.exp((N-eff)/sd));
+}
+
+// Best VOR at a position I can realistically still get at my NEXT pick.
+function expectedBest(pos,N,pc){
+  let best=null;
+  for(const q of PLAYERS){
+    if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
+    if(survives(q,N,pc)>=0.55){ if(best===null||q.v>best) best=q.v; }
+  }
+  return best;
+}
+
+// ---- recommendation engine ----
+// Additive weighting. Multiplicative weights invert on negative VOR, which is
+// what let a 4th QB outrank a startable WR in the late rounds.
+const MAX={QB:2,RB:6,WR:8,TE:2,K:1,DST:1};
+const REQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1};   // starters. Flex handled separately.
+const FLEXOK=["RB","WR","TE"];
+
+function shortfall(){
+  const s={},need={};let total=0;
+  for(const p in REQ){ const d=Math.max(0,REQ[p]-countPos(p)); s[p]=d; total+=d; }
+  const surplus=FLEXOK.reduce((a,p)=>a+Math.max(0,countPos(p)-REQ[p]),0);
+  s.FLEX=surplus>0?0:1; total+=s.FLEX;
+  return {s,total};
+}
+const picksLeft=()=>Math.max(0,ROUNDS-mine.length);
+function rosterByes(){
+  const c={}; mine.forEach(n=>{const p=byName[n]; if(p) c[p.b]=(c[p.b]||0)+1;}); return c;
+}
+function byeLoad(){
+  const c={}; fillRoster().slice(0,7).forEach(s=>{   // QB,WR,WR,RB,RB,TE,FLEX
+    if(s.who) c[s.who.b]=(c[s.who.b]||0)+1; });
+  return c;
+}
+
+function lateBest(pos,fromPick){
+  let best=null;
+  for(const q of PLAYERS){
+    if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
+    if(boardRank(q) < fromPick+38) continue;      // near-certain to still be there
+    if(best===null||q.v>best) best=q.v;
+  }
+  return best;
+}
+function scarcity(p,pick){
+  const lb=lateBest(p.p,pick);
+  if(lb===null) return 45;
+  return Math.max(CFG.scarMin, Math.min(CFG.scarMax, p.v-lb));
+}
+function needBonus(pos,rnd,p_ev_hint,P_,pick_){
+  const have=countPos(pos);
+  if(have>=MAX[pos]) return null;                     // hard cap: never recommend
+  const {s,total}=shortfall(), left=picksLeft();
+  const fillsSlot = s[pos]>0;
+  const fillsFlex = s.FLEX>0 && FLEXOK.includes(pos) && !fillsSlot
+                    && !(pos==="TE"&&have>=1);
+  // endgame: if you have exactly enough picks left to fill your empty starting
+  // slots, nothing else may be recommended.
+  if(left<=total) return (fillsSlot||fillsFlex)?900:null;
+  // kicker and defense are streamable; only in the last two rounds
+  if(pos==="K")   return rnd>=15?800:null;
+  if(pos==="DST") return rnd>=14?800:null;
+  // never a backup QB while real roster work remains
+  if(pos==="QB"&&have>=1) return left<=2?-30:null;
+  // Under 6-point passing TDs the QB1 is a genuine early-round asset; VOR now
+  // carries the timing on its own, so only a mild late nudge remains.
+  if(pos==="QB") return (fillsSlot?scarcity(P_,pick_):0) + (rnd<=1?-30:rnd<=4?-12:0);
+  if(pos==="TE"&&have===0) return scarcity(P_,pick_);
+  if(fillsSlot) return scarcity(P_,pick_);
+  if(fillsFlex){
+    // worth the flex only if he'd actually outscore the alternatives there
+    const bestFlex=Math.max(0,...mine.map(n=>byName[n]).filter(x=>x&&FLEXOK.includes(x.p)).map(x=>x.e));
+    return p_ev_hint>=bestFlex-25?22:6;
+  }
+  // bench balance: you start 2 WR + a flex, so don't leave yourself 3 deep there
+  if(pos==="WR"&&have<4) return CFG.benchWR;
+  if(pos==="RB"&&have<4) return CFG.benchRB;
+  if(pos==="RB"&&have>=4&&countPos("WR")<5) return -CFG.rb5pen; // a 5th RB over a 4th WR is waste
+  return 0;                                            // pure bench upside
+}
+function bestSurviving(pos,nextPick){
+  // best VOR at this position likely to last until my next pick
+  let best=-999;
+  for(const q of PLAYERS){
+    if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
+    if(q.a < nextPick) continue;        // realistically gone by then
+    if(q.v>best) best=q.v;
+  }
+  return best===-999?null:best;
+}
+let PACE={QB:1,RB:1,WR:1,TE:1,K:1,DST:1};
+function score(p,pick,rnd){
+  const nb=needBonus(p.p,rnd,p.e,p,pick);
+  if(nb===null) return null;
+  let s=p.v+nb, why=[];
+  const sf=shortfall().s;
+  if(nb>=900) why.push("<b>must fill</b> — you have "+picksLeft()+" picks and "+shortfall().total+" empty starting slots");
+  else if(nb>=800) why.push("<b>last-round slot</b>");
+  else if(sf[p.p]>0) why.push("<b>fills your open "+p.p+"</b> slot");
+  else if(sf.FLEX>0&&FLEXOK.includes(p.p)) why.push("fills your <b>flex</b>");
+  else why.push("bench value");
+  if(p.v>=30) why.push("<b>"+Math.round(p.v)+" pts</b> over a replacement "+p.p);
+  const bl=byeLoad(), rl=rosterByes();
+  if(FLEXOK.concat("QB").includes(p.p)){
+    const st=bl[p.b]||0, all=rl[p.b]||0;
+    if(st>=4){ s-=CFG.bye4; why.push("<b>bye disaster</b> — "+st+" starters off in week "+p.b); }
+    else if(st>=3){ s-=CFG.bye3; why.push("<b>bye disaster</b> — "+st+" starters already off in week "+p.b); }
+    else if(st>=2){ s-=CFG.bye2; why.push("<b>bye clash</b> — you already start "+st+" in week "+p.b); }
+    else if(all>=4){ s-=CFG.byeAll; why.push(all+" of your roster is off in week "+p.b); }
+  }
+  const sameSkill=mine.filter(n=>byName[n]&&byName[n].t===p.t&&FLEXOK.includes(byName[n].p)).length;
+  if(sameSkill>=2&&FLEXOK.includes(p.p)){ s-=CFG.conc;
+    why.push("third piece of the "+p.t+" offense"); }
+  let isCuff=false;
+  if(p.p==="RB"){
+    const prot=mine.map(n=>byName[n]).filter(x=>x&&x.p==="RB"&&x.t===p.t&&x.v>=40)
+                   .sort((a,b)=>b.v-a.v)[0];
+    if(prot){ isCuff=true; s+=prot.v>=80?CFG.cuffTop:CFG.cuff;
+      why.push("<b>handcuff</b> for "+prot.n+" — your season swings on him"); }
+  }
+  // Bye coverage. Only counts once your starters at that position are set.
+  if(FLEXOK.concat("QB").includes(p.p)){
+    const starters=fillRoster().slice(0,7).filter(x=>x.who).map(x=>x.who);
+    const sameSlot=starters.filter(x=>x.p===p.p);
+    if(sameSlot.length){
+      const offWeeks=new Set(sameSlot.map(x=>x.b));
+      const covered=mine.map(n=>byName[n]).filter(x=>x&&x.p===p.p&&!sameSlot.includes(x));
+      if(offWeeks.has(p.b)){
+        s-=CFG.byeNoCover; why.push("<b>no cover</b> — off the same week as your starting "+p.p);
+      }else if([...offWeeks].some(w=>!covered.some(c=>c.b!==w))){
+        s+=CFG.byeCover; why.push("<b>covers week "+[...offWeeks][0]+"</b>, when your "+p.p+" is off");
+      }
+    }
+  }
+  const myQB=mine.map(n=>byName[n]).filter(x=>x&&x.p==="QB");
+  if(["WR","TE"].includes(p.p)&&myQB.some(q=>q.t===p.t)){ s+=CFG.stack; why.push("stacks with your "+p.t+" QB"); }
+  // OPPORTUNITY COST, pace-aware. What does taking him now buy over the best
+  // player at his position I can still expect at my next pick?
+  const picksArr=myPicks(), nxt=picksArr.find(x=>x>pick);
+  if(nxt&&nb<800){
+    const pc=PACE, eb=expectedBest(p.p,nxt,pc);
+    if(eb!==null){
+      const drop=p.v-eb;
+      if(drop>CFG.dropMin){
+        s+=Math.min(CFG.dropCap,(drop-CFG.dropMin)*CFG.dropMult);
+        why.push("<b>+"+Math.round(drop)+" over the best "+p.p+" expected at pick "+nxt+"</b>");
+      }
+    }
+    const hot=pc[p.p]||1;
+    if(hot>=1.35&&p.v>15){
+      s+=Math.min(CFG.runCap,(hot-1.35)*CFG.runRate);
+      why.push("<b>"+p.p+" run in progress</b> — going "+Math.round((hot-1)*100)+"% faster than the board");
+    }
+    if(hot<=0.75&&survives(p,nxt,pc)>0.75){
+      s-=CFG.coldPen; why.push(p.p+"s are falling; he should last to "+nxt);
+    }
+  }
+  // Reach is measured against where he will ACTUALLY go given the live pace,
+  // not against a static preseason board. In a run, "reaching" is just paying
+  // the new market price.
+  // Only a HOT position pulls a player forward. A cold one does not push him
+  // later than his board rank already implies, so clamp at 1.0.
+  const hotNow=Math.max(1.0, PACE[p.p]||1);
+  const effRank=boardRank(p)/hotNow;
+  const reach=boardRank(p)-pick;   // static board; pace no longer discounts reach
+  if(reach>CFG.reachFree&&nb<800){
+    // insurance on your own star carries option value ADP does not price, so a
+    // handcuff is not penalised for being "early".
+    s-=(reach-CFG.reachFree)*(isCuff?CFG.cuffMult:CFG.reachRate);
+    if(reach>18) why.push("<b>"+Math.round(reach)+" picks early</b> — he will still be there");
+    else why.push("likely still there next round");
+  }
+  if(reach<-6) why.push("<b>falling</b> — ADP "+Math.round(p.a));
+  if(p.r===1&&p.av<1){
+    why.push("<b>availability "+Math.round(p.av*100)+"%</b> — EV already cut for it: "+
+             p.d.split(".")[0].toLowerCase());
+  }
+  if(p.src==="E"){   // estimated from ADP; the ruleset effect is not yet in his EV
+    if(p.s<=-3) why.push("our scoring adds value here");
+    if(p.s>=4)  why.push("our scoring <b>costs</b> him vs standard");
+  }
+  return {p,s,why};
+}
+function recommend(){
+  const pick=curPick(), rnd=Math.min(ROUNDS,Math.ceil(pick/TEAMS));
+  PACE=pace();
+  const live=PLAYERS.filter(p=>!gone.has(p.n)&&!mine.includes(p.n)&&p.v>-90);
+  let out=live.map(p=>score(p,pick,rnd)).filter(Boolean).sort((a,b)=>b.s-a.s).slice(0,5);
+  if(out.length) return out;
+  // FALLBACK 1: a required position exists but the pool is empty there.
+  const {s:sf}=shortfall();
+  const missing=Object.keys(sf).filter(k=>k!=="FLEX"&&sf[k]>0);
+  if(missing.length){
+    const anyLeft=live.filter(p=>missing.includes(p.p));
+    if(anyLeft.length){
+      return anyLeft.sort((a,b)=>b.v-a.v).slice(0,5).map(p=>({p,s:p.v,
+        why:["<b>fills your open "+p.p+"</b> slot"]}));
+    }
+    exhausted=missing;   // nothing at that position remains in the pool at all
+  }
+  // FALLBACK 2: take the best player left rather than showing nothing.
+  return live.sort((a,b)=>b.v-a.v).slice(0,5).map(p=>({p,s:p.v,
+    why:["<b>best available</b> — no required-slot player left in the pool"]}));
+}
+let exhausted=[];
+
+// ---- actions ----
+function markGone(n){ if(gone.has(n)||mine.includes(n))return; goneAt[n]=curPick(); hist.push(["g",n]); gone.add(n); render(); }
+function unGone(n){ gone.delete(n); delete goneAt[n]; render(); }
+function takeIt(n){ if(mine.includes(n))return; if(mine.length>=ROUNDS){alert("You already have 15 picks - that is the whole draft.");return;} takenAt[n]=curPick(); gone.delete(n); hist.push(["m",n]); mine.push(n); render(); }
+function unTake(n){ mine=mine.filter(x=>x!==n); render(); }
+function undo(){ const h=hist.pop(); if(!h)return;
+  if(h[0]==="g"){ gone.delete(h[1]); delete goneAt[h[1]]; }
+  else { mine=mine.filter(x=>x!==h[1]); delete takenAt[h[1]]; } render(); }
+
+// ---- mock draft ----
+// Opponents are modelled as experienced, rational drafters: they draft on value
+// over replacement rather than raw ADP, they respect roster construction, and
+// they reach far less than the field. ADJUST controls how far they have
+// recalibrated to OUR ruleset (6-pt passing TDs, sack penalty):
+//   0   = sharp drafters still priced to standard scoring
+//   0.5 = they have noticed and half-corrected      <-- default
+//   1   = they have fully repriced; our QB edge is gone
+let ADJUST=0.5;
+
+function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+const OREPL={};
+(function(){ const r={QB:10,RB:24,WR:28,TE:10,K:10,DST:10};
+  for(const pos in r){ const g=PLAYERS.filter(p=>p.p===pos&&p.v>-90).sort((a,b)=>b.e-a.e);
+    OREPL[pos]=g[Math.min(r[pos],g.length)-1].e; } })();
+
+// what an opponent thinks a player is worth
+const OREPL_STD={};
+(function(){ const r={QB:10,RB:24,WR:28,TE:10,K:10,DST:10};
+  for(const pos in r){ const g=PLAYERS.filter(p=>p.p===pos&&p.v>-90)
+      .map(p=>p.e-(p.s||0)).sort((a,b)=>b-a);
+    OREPL_STD[pos]=g[Math.min(r[pos],g.length)-1]; } })();
+function oppValue(p){
+  const ev   = p.e - (1-ADJUST)*(p.s||0);
+  const base = OREPL[p.p]*ADJUST + OREPL_STD[p.p]*(1-ADJUST);
+  let v = ev - base;
+  if(p.p==="K"||p.p==="DST") v*=0.2;
+  return v;
+}
+const OMAX={QB:2,RB:6,WR:7,TE:2,K:1,DST:1};
+const OREQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1};
+function oppNeed(pos,have,rnd,left){
+  if((have[pos]||0)>=OMAX[pos]) return null;
+  let short=0; for(const k in OREQ) short+=Math.max(0,OREQ[k]-(have[k]||0));
+  const fills=(have[pos]||0)<OREQ[pos];
+  if(left<=short) return fills?900:null;            // must fill starters
+  if(pos==="K")   return rnd>=14?800:null;
+  if(pos==="DST") return rnd>=13?800:null;
+  if(pos==="QB"&&(have.QB||0)>=1) return left<=2?-40:null;
+  if(pos==="TE"&&(have.TE||0)===0&&rnd>=8) return 45;
+  return fills?40:0;
+}
+
+function runMock(){
+  if(!slot){ alert("Pick your draft slot first."); return; }
+  if(mine.length||gone.size){
+    if(!confirm("This replays the draft from where you are now and fills the rest. Continue?")) return;
+  }
+  const mySet=new Set(myPicks());
+  const rosters={}; for(let t=1;t<=TEAMS;t++) rosters[t]={};
+  let guard=0;
+  while(curPick()<=TEAMS*ROUNDS && guard++<400){
+    const pick=curPick(), rnd=Math.ceil(pick/TEAMS);
+    if(mySet.has(pick)&&mine.length<ROUNDS){
+      const r=recommend();
+      if(!r.length) break;
+      takenAt[r[0].p.n]=pick; mine.push(r[0].p.n); hist.push(["m",r[0].p.n]);
+      continue;
+    }
+    const col = rnd%2 ? ((pick-1)%TEAMS)+1 : TEAMS-((pick-1)%TEAMS);
+    const have = rosters[col];
+    const left = ROUNDS - Object.values(have).reduce((a,b)=>a+b,0);
+    const pool=PLAYERS.filter(p=>!gone.has(p.n)&&!mine.includes(p.n)&&p.v>-90);
+    if(!pool.length) break;
+    let best=null,bestKey=-Infinity;
+    for(const p of pool){
+      const nb=oppNeed(p.p,have,rnd,left);
+      if(nb===null) continue;
+      // sharp drafters still disagree, but far less than the open field
+      // Jason (and likely others) are drafting from the ESPN PPR cheat sheet.
+      // Where we have his ranking, that IS his board; fall back to ADP otherwise.
+      const board = p.espn || p.a;
+      const noise = gauss()*Math.max(3, board*0.06);
+      const key = -board*1.6 + nb*0.35 - Math.max(0,board-pick)*0.25 + noise;
+      if(key>bestKey){bestKey=key;best=p;}
+    }
+    if(!best){ best=pool.sort((a,b)=>a.a-b.a)[0]; }
+    goneAt[best.n]=pick; gone.add(best.n); hist.push(["g",best.n]);
+    have[best.p]=(have[best.p]||0)+1;
+  }
+  mocked=true; sortMode="pick"; render();
+  window.scrollTo({top:document.getElementById("roster").offsetTop-120,behavior:"smooth"});
+}
+let mocked=false;
+
+// ---- render ----
+const $=id=>document.getElementById(id);
+function render(){
+  // slots
+  $("slots").innerHTML="";
+  for(let i=1;i<=TEAMS;i++){
+    const b=document.createElement("button");
+    b.className="slot"; b.textContent=i; b.setAttribute("aria-pressed",i===slot);
+    b.onclick=()=>{slot=i;save();render();};
+    $("slots").appendChild(b);
+  }
+  const pick=curPick(), nm=nextMine();
+  $("curPick").textContent=pick;
+  $("nextPick").textContent=slot?(nm||"done"):"—";
+  $("cnt").innerHTML=mine.length+'<span style="font-size:12px;color:var(--mute)">/15</span>';
+  $("pickBox").className="stat"+(isMyTurn()?" turn":"");
+  $("mineBox").className="stat"+(isMyTurn()?" turn":"");
+  $("away").textContent = !slot ? "Pick your draft slot to start."
+    : isMyTurn() ? "You're on the clock." : (nm? (nm-pick)+" picks until your turn." : "Draft complete.");
+  const away = nm ? (nm-pick) : null;
+  $("fnow").innerHTML =
+    '<span class="fl1">Pick <b>'+pick+'</b> · R'+Math.min(ROUNDS,Math.ceil(pick/TEAMS))+
+    ' · '+gone.size+' gone</span>'+
+    '<span class="fl2">'+(!slot?'pick a slot'
+      : nm===pick ? '<b class="yo">YOUR PICK NOW</b>'
+      : nm ? 'next: <b>'+nm+'</b> ('+away+' away)'
+      : '<b>draft complete</b>')+'</span>';
+
+  // recommendations
+  const recs=recommend();
+  $("recBox").className="rec"+(isMyTurn()?" live":"");
+  $("recHd").textContent=isMyTurn()?"YOU'RE UP — TAKE ONE OF THESE":"If your pick came now";
+  if(exhausted.length){
+    $("still").className="still tight";
+    $("still").innerHTML='<span class="needk">POOL EMPTY AT</span> '+exhausted.join(", ")+
+      ' — every one is drafted here. Take any '+exhausted[0]+' from your league app; they are interchangeable.';
+    exhausted=[];
+  }
+  $("recList").innerHTML="";
+  if(!recs.length) $("recList").innerHTML='<div class="ritem"><div class="body why">Nothing left to suggest.</div></div>';
+  recs.forEach((r,i)=>{
+    const d=document.createElement("div");
+    d.className="ritem"+(i===0?" top":"");
+    d.innerHTML='<div class="no">'+(i+1)+'</div><div class="body">'+
+      '<div class="nm">'+r.p.n+' <span class="pos '+r.p.p+'">'+r.p.p+'</span> '+
+      '<span class="meta">'+r.p.t+' · bye '+r.p.b+' · ADP '+Math.round(r.p.a)+'</span></div>'+
+      '<div class="why">'+(r.why.slice(0,3).join(" &middot; ")||"best value available")+'</div></div>';
+    const btn=document.createElement("button");
+    btn.className="take"+(i===0?"":" ghost"); btn.textContent="I TOOK HIM";
+    btn.onclick=()=>takeIt(r.p.n);
+    d.appendChild(btn); $("recList").appendChild(d);
+  });
+
+  // roster
+  $("roster").innerHTML="";
+  fillRoster().forEach(s=>{
+    const d=document.createElement("div");
+    d.className="rslot"+(s.who?" full":"");
+    d.innerHTML='<span class="c">'+s.code+'</span>'+
+      (s.who?'<span class="who">'+s.who.n+
+             '<span class="rmeta"><span class="pos '+s.who.p+'">'+s.who.p+'</span>'+
+             (takenAt[s.who.n]?'<b class="pk">#'+takenAt[s.who.n]+'</b> ':'')+
+             ' EV <b>'+s.who.e+'</b> · VOR <b>'+Math.round(s.who.v)+'</b>'+
+             (takenAt[s.who.n]?' · ADP '+Math.round(s.who.a):'')+
+             (s.who.av<1?' · '+Math.round(s.who.av*100)+'%':'')+'</span></span>'+
+             '<span class="bw">bye '+s.who.b+'</span>'
+            :'<span class="who" style="color:var(--mute)">—</span>');
+    if(s.who) d.onclick=()=>unTake(s.who.n);
+    $("roster").appendChild(d);
+  });
+  {const R=fillRoster();
+   const st=R.slice(0,9).filter(x=>x.who), bn=R.slice(9).filter(x=>x.who);
+   const sv=st.reduce((a,x)=>a+x.who.v,0), se=R.slice(0,7).filter(x=>x.who).reduce((a,x)=>a+x.who.e,0);
+   const bv=bn.reduce((a,x)=>a+x.who.v,0);
+   const el=document.getElementById("rtot");
+   el.innerHTML = st.length
+     ? '<span class="tk">STARTERS</span> '+Math.round(se)+' pts · '+Math.round(sv)+' VOR'+
+       '<span class="tk" style="margin-left:12px">BENCH</span> '+Math.round(bv)+' VOR'
+     : '';}
+  const sf=shortfall(); const missing=Object.entries(sf.s).filter(([k,v])=>v>0)
+      .map(([k,v])=>v>1?k+"\u00d7"+v:k);
+  const stillEl=document.getElementById("still");
+  stillEl.innerHTML = missing.length
+    ? '<span class="needk">STILL NEED</span> '+missing.join(", ")+
+      ' <span class="needk">'+picksLeft()+' PICKS LEFT</span>'
+    : '<span class="needk">STARTERS COMPLETE</span> '+picksLeft()+' picks left for bench';
+  stillEl.className = (picksLeft()<=sf.total&&missing.length)?"still tight":"still";
+  const bl=byeLoad(); const bad=Object.entries(bl).filter(([w,c])=>c>=3);
+  $("warns").innerHTML = bad.length
+    ? '<div class="warn">Bye trouble: you start <b>'+bad[0][1]+'</b> players in week <b>'+bad[0][0]+'</b>. Avoid adding more.</div>'
+    : "";
+
+  // filters
+  const F=["ALL","RB","WR","TE","QB","K","DST","MINE"];
+  $("filters").innerHTML="";
+  F.forEach(f=>{const b=document.createElement("button");
+    b.className="f";b.textContent=f;b.setAttribute("aria-pressed",f===filter);
+    b.onclick=()=>{filter=f;render();};$("filters").appendChild(b);});
+  const sep=document.createElement("span"); sep.className="sortsep"; sep.textContent="SORT";
+  $("filters").appendChild(sep);
+  [["value","VALUE"],["pick","PICK #"]].forEach(([m,lab])=>{
+    const b=document.createElement("button");
+    b.className="f sortb";b.textContent=lab;b.setAttribute("aria-pressed",m===sortMode);
+    b.onclick=()=>{sortMode=m;render();};$("filters").appendChild(b);});
+
+  // list
+  const q=query.toLowerCase();
+  const pickOf=p=>takenAt[p.n]||goneAt[p.n]||Infinity;
+  const rows=PLAYERS.filter(p=>{
+    if(filter==="MINE") return mine.includes(p.n);
+    if(filter!=="ALL"&&p.p!==filter) return false;
+    if(q&&!(p.n.toLowerCase().includes(q)||p.t.toLowerCase().includes(q))) return false;
+    return true;
+  }).sort((a,b)=> sortMode==="pick"
+        ? (pickOf(a)-pickOf(b)) || (b.v-a.v)
+        : 0).slice(0,180);
+  $("list").innerHTML="";
+  rows.forEach(p=>{
+    const isG=gone.has(p.n), isM=mine.includes(p.n), dead=p.r===2;
+    const d=document.createElement("div");
+    d.className="row"+(isG?" gone":"")+(isM?" mine":"")+(dead?" dead":"");
+    const pk=pickOf(p);
+    d.innerHTML='<div class="info"><div class="nm">'+
+      (pk<Infinity?'<span class="pknum'+(isM?' me':'')+'">#'+pk+'</span> ':'')+p.n+
+      (p.r===1?' <span class="riskdot">'+Math.round(p.av*100)+'%</span>':'')+
+      (dead?' <span class="riskdot">OUT</span>':'')+'</div>'+
+      '<div class="meta"><span class="pos '+p.p+'">'+p.p+'</span> '+p.t+' · bye '+p.b+
+      ' · ADP '+Math.round(p.a)+' · EV '+p.e+' · VOR '+Math.round(p.v)+'</div></div>';
+    const box=document.createElement("div"); box.className="btns";
+    const gx=document.createElement("button");
+    gx.className="b x"+(isG?" on":""); gx.textContent="X";
+    gx.title="someone else drafted him";
+    gx.onclick=()=>isG?unGone(p.n):markGone(p.n);
+    const mb=document.createElement("button");
+    mb.className="b"+(isM?" on":""); mb.textContent="MINE";
+    mb.onclick=()=>isM?unTake(p.n):takeIt(p.n);
+    box.append(gx,mb); d.appendChild(box); $("list").appendChild(d);
+  });
+  save();
+}
+
+// ---- persistence ----
+async function save(){ try{ await window.storage.set("sstlv-live",
+  JSON.stringify({slot,gone:[...gone],mine,takenAt,goneAt,sortMode})); }catch(e){} }
+async function load(){ try{
+  const r=await window.storage.get("sstlv-live");
+  if(r&&r.value){const d=JSON.parse(r.value);
+    slot=d.slot||null; gone=new Set(d.gone||[]); mine=d.mine||[]; takenAt=d.takenAt||{}; goneAt=d.goneAt||{}; sortMode=d.sortMode||"value";}
+  }catch(e){} render(); }
+
+$("q").addEventListener("input",e=>{query=e.target.value;render();});
+$("mock").onclick=runMock;
+$("addBtn").onclick=()=>{
+  const nm=$("addName").value.trim(), ps=$("addPos").value;
+  if(!nm) return;
+  if(!byName[nm]){ PLAYERS.push({n:nm,p:ps,t:"--",b:0,a:200,e:0,v:-2,s:0,src:"E",r:0,
+    d:"Added by hand during the draft."}); byName[nm]=PLAYERS[PLAYERS.length-1]; }
+  takeIt(nm); $("addName").value="";
+};
+$("undo").onclick=undo;
+$("reset").onclick=()=>{gone.clear();mine=[];hist=[];takenAt={};goneAt={};sortMode="value";render();};
+load();
+</script>
+</body>
+</html>
