@@ -526,6 +526,43 @@ function matchBoardName(raw,hint){
 // below it goes to the confirm strip instead.
 const AUTO_COMMIT=0.85;
 
+// ---- drop-off view ----
+// The engine already computes what the best player at each position will be at
+// your NEXT pick — it is how opportunity cost is priced. It was only ever used
+// internally. Surfacing it lets you see the trade-off yourself instead of
+// taking the recommendation on trust: "RB 92 -> 61" means waiting a round costs
+// 31 points of VOR at running back, and nothing at a position showing 0.
+// Read-only. It computes nothing the engine was not already computing.
+function dropOff(){
+  const pick=curPick(), nxt=myPicks().find(x=>x>pick);
+  if(!nxt) return [];
+  const pc=pace(), out=[];
+  for(const pos of ["QB","RB","WR","TE"]){
+    let now=null;
+    for(const q of PLAYERS){
+      if(q.p!==pos||gone.has(q.n)||mine.includes(q.n)||q.v<=-90) continue;
+      if(now===null||q.v>now) now=q.v;
+    }
+    if(now===null) continue;
+    const eb=expectedBest(pos,nxt,pc);
+    out.push({pos,now,next:eb,drop:eb===null?null:now-eb});
+  }
+  // Steepest cliff first: that is the position you cannot afford to wait on.
+  return out.sort((a,b)=>(b.drop==null?-1:b.drop)-(a.drop==null?-1:a.drop));
+}
+function renderDrop(){
+  const box=$("drop"); if(!box) return;
+  const rows=dropOff();
+  if(!rows.length){ box.innerHTML=""; return; }
+  const nxt=myPicks().find(x=>x>curPick());
+  box.innerHTML='<span class="dlbl">COST OF WAITING TO '+nxt+'</span>'+
+    rows.map(r=>'<span class="dchip'+(r.drop!==null&&r.drop>=25?" hot":"")+'">'+
+      '<span class="pos '+r.pos+'">'+r.pos+'</span> '+Math.round(r.now)+
+      (r.next===null?' <b>&rarr; none</b>'
+        :' &rarr; '+Math.round(r.next)+' <b>'+(r.drop>0?"&minus;"+Math.round(r.drop):"0")+'</b>')+
+      '</span>').join("");
+}
+
 // ---- the "likely next" board ----
 // Sorted by the OPPONENT's board, not ours: these are the players about to be
 // taken, so this is the list a pick almost always comes from. One tap each.
@@ -701,6 +738,7 @@ function render(){
     mb.onclick=()=>isM?unTake(p.n):takeIt(p.n);
     box.append(gx,mb); d.appendChild(box); $("list").appendChild(d);
   });
+  renderDrop();
   renderFast();
   renderLikely();
   renderFeed();

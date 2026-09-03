@@ -189,7 +189,16 @@ input#fast:focus{outline:none;border-color:var(--hi);background:#141A22}
 .fdrow.low{background:rgba(251,140,66,.10)}
 .fdrow button{appearance:none;border:1px solid var(--line);background:none;color:var(--mute);
   font-family:var(--mono);font-size:9px;padding:4px 7px;border-radius:4px;cursor:pointer;flex:none}
-.stealth .why,.stealth .rtot,.stealth #recList .meta{visibility:hidden}
+.drop{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:9px}
+.drop:empty{display:none}
+.dlbl{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;color:#5F6C7D;width:100%}
+.dchip{font-family:var(--mono);font-size:10.5px;color:var(--mute);background:var(--card2);
+  border:1px solid var(--line);border-radius:5px;padding:5px 7px;white-space:nowrap}
+.dchip b{color:var(--ink)}
+.dchip.hot{border-color:var(--hi);color:var(--hi)}
+.dchip.hot b{color:var(--hi)}
+.dchip .pos{font-size:8px;min-width:22px;padding:1px 3px;margin-right:3px}
+.stealth .why,.stealth .rtot,.stealth #recList .meta,.stealth .drop{visibility:hidden}
 
 /* bridge panel: rendered only by the userscript build, hidden when empty */
 #brPanel:empty{display:none}
@@ -250,6 +259,7 @@ input#fast:focus{outline:none;border-color:var(--hi);background:#141A22}
     <div class="rhd" id="recHd">Recommended</div>
     <div id="recList"></div>
   </div>
+  <div class="drop" id="drop"></div>
 </section>
 
 <section style="padding-top:0">

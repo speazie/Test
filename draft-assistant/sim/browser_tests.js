@@ -60,6 +60,14 @@ function ok(label, cond, detail) {
     ok('tapping "going next" advances the board',
       Number(afterTap) === Number(beforeTap) + 1, beforeTap + ' -> ' + afterTap);
 
+    // Drop-off view: what waiting until the next pick actually costs.
+    // Three picks are in, so from slot 6 the next one is pick 6.
+    const dropText = await page.textContent('#drop');
+    ok('drop-off view names the next pick', /COST OF WAITING TO 6/.test(dropText || ''),
+      'got: ' + (dropText || '').slice(0, 60));
+    const chips = await page.locator('#drop .dchip').count();
+    ok('drop-off shows a chip per position', chips === 4, 'chips=' + chips);
+
     // Per-row undo in the feed.
     const feedRows = await page.locator('#feed .fdrow').count();
     ok('every entry appears in the pick feed', feedRows === 3, 'rows=' + feedRows);
