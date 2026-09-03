@@ -97,6 +97,27 @@ seeded drafts hash byte-identically across every value tried.
 | `flexTE` | Only sets the *nominal* flex in `fillRoster`; the season simulator computes its own optimal lineup. Unmeasurable by construction. |
 | `scarMax` | See below. |
 
+### The one apparent improvement did not replicate
+
+`reachRate 0.6 → 0.3` was the single candidate to clear the 2-SE bar in the
+probe: **+1.7 ± 0.7 title points (2.3 SE)**. One hit out of sixteen candidates
+is exactly what multiple comparisons produce by chance, so it was re-tested on
+**ten held-out seeds, 4,000 seasons per config**:
+
+| reachRate | Title | Paired diff | |
+|---|---|---|---|
+| **0.6 (shipped)** | **41.5%** | — | baseline |
+| 0.45 | 40.8% | −0.8 ± 1.3 | no effect |
+| 0.3 | 40.4% | **−1.1 ± 0.9** | no effect, and the sign flipped |
+
+It did not replicate. On fresh seeds the effect reverses. **No weight change is
+justified; the shipped `CFG` stays exactly as it is.**
+
+Note this is the *second* independent failure to tune `reachRate` — README
+section 3 records the earlier move from 1.7 → 0.6 as "not statistically
+significant" too. Two attempts, two non-replications, is decent evidence the
+weight is simply fine and the configuration sits on a flat optimum.
+
 ## 4. Scarcity is saturated — the mechanism is a constant
 
 The README's proudest mechanism: *"filling a slot early is worth exactly this
