@@ -169,11 +169,20 @@ It works, but the layout is different and the flow has one extra step:
   back once you have tapped the list.
 - Everything else is identical.
 
-**If you open `practice.html` on a phone and see nothing at all**, check how you
-opened it. iOS Files and some mail clients preview HTML in a viewer that does
-not run JavaScript, which shows a blank or inert page. Open it in **Safari or
-Chrome proper** (Files → share → open in browser), or just use a laptop — the
-practice page is only a rehearsal.
+### If the buttons do nothing
+
+The page now tells you why. A **red banner at the top** appears whenever
+something has gone wrong, and its wording identifies the problem:
+
+| Banner says | Meaning | Fix |
+|---|---|---|
+| *"JavaScript has not run on this page"* | The file was opened in a **preview**, not a browser. iOS Files, Mail, Slack and Drive all preview HTML with scripts disabled — buttons render but are dead. | iPhone: share → **Open in Safari**. Android: open with **Chrome**. |
+| *"JavaScript started but did not finish"* | The script began and stopped partway. | Send me the text under it. |
+| *"The assistant hit an error and stopped"* | A real bug — the exact error and line are printed underneath, along with your browser version. | Send me that text. |
+| **no banner** | Everything ran. | — |
+
+That third row is the one to screenshot: it prints the actual error message and
+your user-agent, which is what I need to fix it.
 
 ## Troubleshooting
 

@@ -7,11 +7,41 @@
 // both a desktop and a phone.
 module.exports = function mountShim({ css, body, padBody }) {
   return `
+  // ---- self-diagnostic, before anything that can fail ----
+  // If any of the code below throws, the page would otherwise look like a set
+  // of dead buttons. Report it where the user can actually read it.
+  function SSTLV_DIAG(msg, detail) {
+    try {
+      var el = document.getElementById("jsCheck");
+      if (!el) { if (detail) console.error(msg, detail); return; }
+      el.style.display = "";
+      el.innerHTML = "<b>" + msg + "</b>" +
+        (detail ? "<div style='margin-top:8px;font:11px ui-monospace,Menlo,Consolas,monospace'>" +
+          String(detail).replace(/[<&]/g, " ") + "</div>" : "");
+    } catch (e) {}
+  }
+  (function () {
+    var d = document.getElementById("jsDiag");
+    if (d) {
+      d.textContent = navigator.userAgent + " | shadowDOM:" +
+        (!!document.createElement("div").attachShadow) +
+        " fromEntries:" + (typeof Object.fromEntries === "function");
+    }
+    var c = document.getElementById("jsCheck");
+    if (c) c.innerHTML = "<b>JavaScript started but did not finish.</b>" +
+      "<br>Something below threw. The exact error will replace this message.";
+  })();
+  window.addEventListener("error", function (ev) {
+    SSTLV_DIAG("The assistant hit an error and stopped.",
+      (ev.message || "") + "  @" + (ev.filename || "") + ":" + (ev.lineno || ""));
+  });
+
   var HOST = document.createElement("div");
   HOST.id = "sstlv-host";
   var SHADOW = HOST.attachShadow({ mode: "open" });
   SHADOW.innerHTML = "<style>" + ${JSON.stringify(css)} + "</style>" + ${JSON.stringify(body)};
-  document.documentElement.appendChild(HOST);
+  var MOUNT = document.body || document.documentElement;
+  MOUNT.appendChild(HOST);
 
   var TAB = document.createElement("button");
   TAB.id = "sstlv-tab";
@@ -22,7 +52,7 @@ module.exports = function mountShim({ css, body, padBody }) {
     "font:700 12px ui-monospace,Menlo,Consolas,monospace", "letter-spacing:.09em",
     "padding:10px 12px", "cursor:pointer", "touch-action:manipulation"
   ].join(";");
-  document.documentElement.appendChild(TAB);
+  MOUNT.appendChild(TAB);
 
   // A phone cannot show a 400px side panel AND the board at once. On a narrow
   // screen the panel is a full-screen overlay that starts CLOSED, so you see

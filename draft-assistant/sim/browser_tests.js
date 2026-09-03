@@ -235,7 +235,23 @@ function ok(label, cond, detail) {
     const mst = await page.evaluate(() => window.__sstlv.state());
     ok('imports by touch', mst.gone + mst.mine.length === 4, 'got ' + (mst.gone + mst.mine.length));
     ok('no page errors on mobile', errs.length === 0, errs.join(' | '));
+    ok('self-diagnostic banner clears on a healthy load',
+      await page.evaluate(() => {
+        const c = document.getElementById('jsCheck');
+        return !c || getComputedStyle(c).display === 'none';
+      }));
     await ctx.close();
+
+    // The failure the user actually hit: a preview that does not run scripts.
+    // The page must SAY so rather than looking like dead buttons.
+    const noJs = await browser.newContext({ ...devices['iPhone 13'], javaScriptEnabled: false });
+    const np = await noJs.newPage();
+    await np.goto(PRACTICE);
+    const banner = (await np.textContent('#jsCheck')) || '';
+    ok('with scripts disabled the page explains itself',
+      /JavaScript has not run/.test(banner) && /Open in Safari/.test(banner),
+      banner.slice(0, 80));
+    await noJs.close();
   }
 
   await browser.close();

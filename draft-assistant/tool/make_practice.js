@@ -65,6 +65,12 @@ ${engineScoped}
 ${scoped}
 
 ${driver}
+
+  // Everything ran. Clear the diagnostic banner.
+  (function () {
+    var c = document.getElementById("jsCheck");
+    if (c) c.style.display = "none";
+  })();
 })();
 `;
 
