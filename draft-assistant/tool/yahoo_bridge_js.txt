@@ -459,6 +459,40 @@ function scanRegion() {
   return all.filter(r => !BR.seen.has(r.player.n));
 }
 
+// ---- borrow Yahoo's own position colours ----
+// Guessing these from screenshots was never going to land. The draft room is
+// right here and it has already computed them, so read them off it: find the
+// elements whose entire text is a position token, take their rendered colour,
+// and paint our chips to match. Nothing to maintain, and it follows Yahoo
+// through a redesign.
+function adoptYahooColours() {
+  const map = { QB: "qb", RB: "rb", WR: "wr", TE: "te", K: "k", DEF: "dst", DST: "dst" };
+  const found = {};
+  const all = document.body.getElementsByTagName("*");
+  for (let i = 0; i < all.length && Object.keys(found).length < 6; i++) {
+    const e = all[i];
+    if (e.children.length) continue;
+    if (HOST && HOST.contains(e)) continue;
+    const t = (e.textContent || "").trim().toUpperCase();
+    const key = map[t];
+    if (!key || found[key]) continue;
+    if (e.getClientRects && e.getClientRects().length === 0) continue;
+    const col = getComputedStyle(e).color;
+    // Ignore the page's ordinary body text: a position label is coloured.
+    if (!col || /rgba?\(\s*0\s*,\s*0\s*,\s*0/.test(col)) continue;
+    found[key] = col;
+  }
+  const root = SHADOW && SHADOW.host ? SHADOW : null;
+  let n = 0;
+  for (const key in found) {
+    // The chips print dark text on the colour, so a colour Yahoo renders as
+    // TEXT becomes our background.
+    HOST.style.setProperty("--" + key, found[key]);
+    n++;
+  }
+  return n;
+}
+
 // ---- the draft slot, worked out from the board ----
 // Setting the slot by hand is one more thing to get wrong before a draft, and
 // getting it wrong is silent: the tool simply believes your picks are somebody
@@ -479,15 +513,20 @@ function learnSlot(reads) {
   for (const sl of BR.youSlots) tally[sl] = (tally[sl] || 0) + 1;
   let bestSlot = null, bestN = 0;
   for (const sl in tally) if (tally[sl] > bestN) { bestN = tally[sl]; bestSlot = +sl; }
-  // One sighting is enough to fill an empty slot; overruling a slot you chose
-  // yourself takes two, so a single misread cannot move your seat.
-  const need = slot ? 2 : 1;
-  if (bestN >= need && bestSlot !== slot) {
-    const was = slot;
+  if (bestSlot === slot || bestN < 2) return;
+  // Filling an EMPTY slot is safe and saves you a step. Overruling one you set
+  // is not: a single mislabelled row would move your seat, re-attribute every
+  // pick already entered, and you would watch a player go onto your roster and
+  // straight back off it again. So once you have chosen a slot, the board
+  // argues its case and you decide.
+  if (!slot) {
     const moved = applySlot(bestSlot);
-    BR.note = "The board says you are slot " + bestSlot +
-      (was ? " (you had " + was + " set)" : "") + "." +
-      (moved ? " Moved " + moved + " pick" + (moved > 1 ? "s" : "") + " to the right side." : "");
+    BR.note = "The board says you are slot " + bestSlot + "." +
+      (moved ? " Moved " + moved + " pick" + (moved > 1 ? "s" : "") + " onto your roster." : "");
+  } else {
+    BR.note = "The board looks like slot " + bestSlot + ", but you have " + slot +
+      " set. If the board is right, tap " + bestSlot + " above — nothing moves " +
+      "until you do.";
   }
 }
 
@@ -854,6 +893,7 @@ loadBridge();
 // best case is that draft night needs no setup at all. Retried a few times
 // because the draft room renders its sidebar well after the script runs.
 [1500, 5000, 12000].forEach(ms => setTimeout(() => {
+  try { adoptYahooColours(); } catch (e) {}
   if (BR.el || picking) return;
   const auto = autoFindPickList();
   if (!auto) return;

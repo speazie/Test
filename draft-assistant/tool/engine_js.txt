@@ -25,6 +25,12 @@ const byName=Object.fromEntries(PLAYERS.map(p=>[p.n,p]));
 const myPicks=()=>slot?Array.from({length:ROUNDS},(_,i)=>{const r=i+1;
   return r%2?(r-1)*TEAMS+slot:r*TEAMS-slot+1;}):[];
 const curPick=()=>gone.size+mine.length+1;
+// The pick number to STAMP on something entered by hand. Our own count is
+// gone+mine+1, which is only right while nothing has been missed; the board's
+// number is right always. Tapping "I TOOK HIM" recorded the former, so the
+// moment the tool fell a pick behind, every pick number it wrote down was
+// wrong -- including the ones that decide whose pick it was.
+const atPick=()=>(typeof boardPick!=="undefined"&&boardPick!=null&&boardPick>0)?boardPick:curPick();
 const nextMine=()=>myPicks().find(n=>n>=curPick());
 const isMyTurn=()=>slot&&nextMine()===curPick();
 
@@ -488,9 +494,9 @@ function recommend(){
 let exhausted=[];
 
 // ---- actions ----
-function markGone(n){ if(gone.has(n)||mine.includes(n))return; goneAt[n]=curPick(); hist.push(["g",n]); gone.add(n); render(); }
+function markGone(n){ if(gone.has(n)||mine.includes(n))return; goneAt[n]=atPick(); hist.push(["g",n]); gone.add(n); render(); }
 function unGone(n){ gone.delete(n); delete goneAt[n]; render(); }
-function takeIt(n){ if(mine.includes(n))return; if(mine.length>=ROUNDS){alert("You already have 15 picks - that is the whole draft.");return;} takenAt[n]=curPick(); gone.delete(n); hist.push(["m",n]); mine.push(n); render(); }
+function takeIt(n){ if(mine.includes(n))return; if(mine.length>=ROUNDS){alert("You already have 15 picks - that is the whole draft.");return;} takenAt[n]=atPick(); gone.delete(n); hist.push(["m",n]); mine.push(n); render(); }
 function unTake(n){ mine=mine.filter(x=>x!==n); render(); }
 
 // Setting the draft slot AFTER picks are already in is the normal order of
@@ -836,7 +842,7 @@ function ingestPick(name,opt){
   const o=opt||{};
   const p=byName[name]; if(!p) return {ok:false,why:"unknown player"};
   if(gone.has(name)||mine.includes(name)) return {ok:false,why:"already off the board"};
-  const rec={n:name,pick:o.pick||curPick(),src:o.src||"board",conf:o.conf==null?1:o.conf,
+  const rec={n:name,pick:o.pick||atPick(),src:o.src||"board",conf:o.conf==null?1:o.conf,
              mine:!!o.mine,note:o.note||null};
   if(o.mine) takeIt(name); else markGone(name);
   feed.push(rec); if(feed.length>200) feed.shift();

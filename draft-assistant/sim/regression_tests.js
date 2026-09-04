@@ -42,6 +42,28 @@ console.log("\nSample slot 5:");
 A.fillRoster().forEach(s =>
   console.log("   " + s.code.padEnd(6) + (s.who ? s.who.n + " (" + s.who.p + ", bye " + s.who.b + ")" : "—")));
 
+// ---- entering a pick by hand, when the tool has fallen behind ----
+// Reported live: "if it fails to recognise my pick and I click I TOOK HIM, the
+// pick number is never right." Manual entry stamped gone+mine+1, which is only
+// correct while nothing has been missed. The board's own number is correct
+// always, and the tool already reads it.
+{
+  const EX = 'PLAYERS,recommend,ingestPick,takeIt,markGone,curPick,atPick,setBoardPick,' +
+             'desync,likelyNext,myPicks,setSlot:v=>{slot=v},getMine:()=>mine,takenAt:takenAt';
+  const B = fresh(undefined, EX);
+  B.setSlot(6);
+  for (let i = 0; i < 15; i++) B.ingestPick(B.likelyNext(1)[0].n, { src: 'tap', conf: 1 });
+  B.setBoardPick(21);                       // five picks went by unseen
+  const who = B.likelyNext(1)[0].n;
+  B.takeIt(who);
+  console.log("\nManual entry while 5 picks behind:");
+  console.log("   tool counted " + B.curPick() + ", board on 21 -> stamped #" + B.takenAt[who]);
+  if (B.takenAt[who] !== 21) {
+    console.error("FAIL: I TOOK HIM stamped #" + B.takenAt[who] + ", board said 21");
+    process.exit(1);
+  }
+}
+
 // ---- hard assertions ----
 const problems = [];
 if (fails) problems.push(fails + " broken roster(s) out of " + n);

@@ -20,6 +20,8 @@ function scopeForShadow(css) {
     .replace(/(^|[}\s])\s*body\s*\{/g, '$1:host{');
   out += `
 /* --- shadow-boundary corrections, appended by mountShim --- */
+/* Position colours are re-declared here so the bridge can overwrite them on
+   the host element with the draft room's own rendered values. */
 :host{display:block;background:#0D1015;color:#E9EEF3;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   font-size:15px;line-height:1.4}
