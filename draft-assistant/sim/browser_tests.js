@@ -14,6 +14,7 @@ H.readFreshHtml();            // refuse to test a stale build
 const TOOL = 'file://' + path.join(H.ROOT, 'tool/live-draft-assistant.html');
 const ROOM = 'file://' + path.join(H.ROOT, 'sim/fixtures/mock_draft_room.html');
 const SIDEBAR = 'file://' + path.join(H.ROOT, 'sim/fixtures/yahoo_sidebar.html');
+const DEEPROOM = 'file://' + path.join(H.ROOT, 'sim/fixtures/yahoo_room_deep.html');
 const PRACTICE = 'file://' + path.join(H.ROOT, 'tool/practice.html');
 const USERSCRIPT = path.join(H.ROOT, 'tool/yahoo-draft-bridge.user.js');
 
@@ -249,6 +250,80 @@ function ok(label, cond, detail) {
     st = await page.evaluate(() => window.__sstlv.state());
     ok('a new pick in the real shape auto-commits', st.seen.includes('Bijan Robinson'),
       'seen=' + st.seen.join(', '));
+
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nyahoo bridge — a deeply nested room, bound by mistake');
+  // ======================================================================
+  // Second draft-night failure: the panel said LIVE, read nothing, and the
+  // bind outline covered only the "RB - Ind - Bye 13" line. The live room puts
+  // six styled wrappers between a pick and the list, so climbing eight levels
+  // from that line never reached the list and every level read zero players.
+  // The fixture reproduces that depth, plus an available-players table on the
+  // same page whose rank column is a bare integer too.
+  {
+    const page = await browser.newPage();
+    await page.goto(DEEPROOM);
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    const tag = () => page.evaluate(() => {
+      const e = window.__sstlv.BR.el;
+      return e ? e.tagName + (e.id ? '#' + e.id : '.' + String(e.className || '')) : null;
+    });
+
+    // Best case: it binds itself, with no setup at all.
+    await page.waitForFunction(() => !!window.__sstlv.BR.el, null, { timeout: 8000 })
+      .catch(() => {});
+    ok('it finds the pick list on its own, with no interaction',
+      (await tag()) === 'DIV#picklog', 'bound ' + (await tag()));
+    ok('binding itself commits nothing',
+      (await page.evaluate(() => window.__sstlv.state())).gone === 0);
+
+    // The exact thing the user did: click the bye-week line under the name.
+    await page.click('#sstlv-host >> #brBind');
+    await page.click('#picklog .meta');
+    ok('clicking the bye-week line still binds the LIST, not the line',
+      (await tag()) === 'DIV#picklog', 'bound ' + (await tag()));
+    let pre = await page.evaluate(() => (window.__sstlv.BR.preload || [])
+      .map(f => f.player.n + (f.pick ? '@' + f.pick : '')));
+    ok('reads all three picks with their pick numbers',
+      pre.join(',') === 'Puka Nacua@5,Jonathan Taylor@6,Saquon Barkley@7', pre.join(', '));
+    ok('an injury badge does not stop the match ("P. NACUA Q")',
+      pre.some(x => /^Puka Nacua@5$/.test(x)), pre.join(', '));
+    ok('a manager name is not a player ("jeff")',
+      !pre.some(x => /Jefferson/.test(x)), pre.join(', '));
+
+    // FIND IT from cold: no aiming at all.
+    await page.evaluate(() => { window.__sstlv.BR.el = null; window.__sstlv.BR.path = null; });
+    await page.click('#sstlv-host >> #brFind');
+    ok('FIND IT locates the pick list with no click to go on',
+      (await tag()) === 'DIV#picklog', 'found ' + (await tag()));
+    ok('FIND IT does not bind the 20-row available table',
+      !/avail/i.test(await tag()), 'found ' + (await tag()));
+
+    // And the whole point: new picks land by themselves at that depth.
+    await page.click('#sstlv-host >> #brImport');
+    await page.evaluate(() => window.addDeepPick(8, 'Donnie', 'J. JEFFERSON', 'WR • Min • Bye 6'));
+    await page.waitForFunction(() => window.__sstlv.state().seen.length >= 4,
+      null, { timeout: 6000 }).catch(() => {});
+    const st = await page.evaluate(() => window.__sstlv.state());
+    ok('a new pick six wrappers deep commits by itself',
+      st.seen.includes('Justin Jefferson'), 'seen=' + st.seen.join(', '));
+    // We joined at pick 5, so the tool has four picks and Yahoo is on nine.
+    // That gap is the desync banner doing its job, and it proves the reader
+    // took the pick NUMBER off the new row and not just the name.
+    const gap = await page.evaluate(() => window.__sstlv.desync());
+    ok('it reads the board pick number, and says so', gap === 4,
+      'tool on ' + st.pick + ', gap ' + gap);
+
+    // The panel must never tell you to press a button that is not there.
+    const panel = await page.textContent('#sstlv-host >> #brPanel');
+    ok('armed panel offers no ARM button and does not ask for one',
+      !/\bARM\b/.test(panel), panel.slice(0, 160));
+    ok('panel always shows how much it can actually read',
+      /players? readable in it/.test(panel), panel.slice(0, 200));
 
     await page.close();
   }

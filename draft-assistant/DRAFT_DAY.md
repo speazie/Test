@@ -76,12 +76,17 @@ board persists across a reload, so nothing is lost if the page refreshes.
    panel opens beside the board. Click the tab to collapse it.
 2. **Set your draft slot** (the row of numbers 1–10). Pick **6**. Nothing
    detects which picks are yours until you do this.
-3. Click **BIND THE PICK LIST**, then click anywhere on the part of the page
-   that lists picks already made. A yellow outline shows what will be bound —
-   it outlines the whole list, not the single word under your cursor.
+3. **Check the bridge box.** Within a few seconds it should say it found the
+   pick list by itself, and the line under the buttons should read
+   *"watching &lt;div…&gt; — **n** players readable in it"*. If **n** is 0 or the
+   list looks wrong, tap **FIND IT**; if that still misses, tap
+   **BIND THE PICK LIST** and click directly on a pick, then **DIAGNOSE**.
 4. If picks have already been made, the panel offers **IMPORT n**. Tap it. If
    the draft has not started, tap **ARM**.
 5. That is it. Picks now land by themselves.
+
+Binding never commits anything — it only decides where to look. IMPORT and ARM
+are the deliberate steps, so pressing FIND IT as often as you like is free.
 
 ## Read this before you trust the QB plan
 
@@ -191,7 +196,8 @@ your user-agent, which is what I need to fix it.
 | Symptom | Fix |
 |---|---|
 | No yellow SSTLV button | Tampermonkey disabled, or the script is off. Check the dashboard toggle. Reload the page. |
-| Panel appears, but BIND finds nothing | You clicked a heading or empty space. Click directly on a row that has a player's name in it. |
+| Panel appears, but BIND finds nothing | Tap **FIND IT** — it searches the page for the pick list itself and needs no aim. Then **DIAGNOSE** to confirm what it got. |
+| Panel says LIVE but "0 players readable in it" | It is watching the wrong element. **FIND IT**, or rebind by clicking directly on a pick. |
 | It bound the wrong list (marks everyone gone) | **PAUSE**, then **REBIND REGION** onto the pick log. Undo the bad rows in the feed, or **RESET** and re-import. |
 | Picks stop arriving | Red dot appears after 25s. Hit **RESCAN**. If still dead, just use tap entry — you lose nothing but the automation. |
 | Says LIVE but nothing lands | Hit **DIAGNOSE**. It prints the rows the reader is actually seeing and what it made of each one — see below. |
@@ -217,7 +223,7 @@ Read it like this:
 
 | What it says | What it means |
 |---|---|
-| `0 rows` or a tiny row count | Bound the wrong element. **REBIND REGION** onto a row that has a player's name in it. |
+| `0 rows` or a tiny row count | Bound the wrong element. Tap **FIND IT**, or **REBIND REGION** onto a row that has a player's name in it. |
 | Rows are there, all "no name left after stripping" | It is looking at headings or manager names, not picks. Rebind one level in. |
 | Names match but every row says **NO PICK NUMBER** | Reads still commit; only turn detection suffers. Set your slot and watch the desync banner. |
 | Row counts in the hundreds | It bound the *available* list. Rebind — and undo anything it committed. |
@@ -264,16 +270,23 @@ trusting something I could not test.
 - Your own pick (1.06 from slot 6) lands on your roster, not the board.
 
 **Not verified — this is the honest gap:**
-- **Yahoo's actual draft-room HTML.** Still never opened a live room, but the
-  gap is narrower than it was. A screenshot of the real draft-room sidebar
-  showed four things the reader had guessed wrong — pick numbers are bare
-  integers (`2`), not `1.02`; team codes are title case (`Det`), not `DET`;
-  names are initial + surname (`J. GIBBS`); and the position/team/bye line sits
-  in its own element, so it scans as a row of its own. All four are fixed and
-  the sidebar shape is now a permanent test (`sim/fixtures/yahoo_sidebar.html`).
+- **Yahoo's actual draft-room HTML.** Still never opened a live room, but two
+  rounds of screenshots have closed most of the gap. Eight things the reader had
+  guessed wrong are now fixed and pinned by tests
+  (`sim/fixtures/yahoo_sidebar.html`, `sim/fixtures/yahoo_room_deep.html`):
+  pick numbers are bare integers (`2`), not `1.02`; team codes are title case
+  (`Det`); names are initial + surname (`J. GIBBS`); the position/team/bye line
+  sits in its own element; an injury badge (`Q`) hangs off the name and used to
+  kill the match outright; `•` separators blocked that badge from being
+  stripped; the `K` in `K. WALKER III` was read as the kicker position; and
+  manager names between picks fuzzy-matched real players (`jeff` → Justin
+  Jefferson). The room also nests a pick six wrappers below the list, which is
+  what made a mis-aimed click bind a bye-week line and read nothing — hence
+  FIND IT, which does not depend on aim at all.
   What is *still* unverified is whether the whole page behaves the same way live
-  — virtualised scrolling, a redesign mid-draft. **The mock-draft dry run is
-  what closes that.** Do it, and if it misbehaves press DIAGNOSE.
+  — virtualised scrolling that unmounts old picks, or a redesign mid-draft.
+  **The mock-draft dry run is what closes that.** Do it, and if it misbehaves
+  press DIAGNOSE.
 - **Yahoo's official API is not used.** It now requires manual approval from
   Yahoo before an app can read fantasy data, which is not a plan for a draft
   that is imminent. If you already hold approved API credentials, say so — an

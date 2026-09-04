@@ -1,0 +1,100 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Yahoo draft room (deep)</title>
+<style>
+body{background:#12141c;color:#e9eef3;font:13px system-ui;margin:0;display:flex}
+#left{width:300px;border-right:1px solid #262b38}
+#centre{flex:1;padding:10px}
+.hd{padding:10px;border-bottom:1px solid #262b38;color:#7fe3a1}
+.tabs{display:flex;gap:6px;padding:8px}
+.mgr{padding:6px 10px;color:#c9d1e0}
+.num{color:#8a93a5;font-weight:700;margin-right:8px}
+.nm{font-weight:600}
+.meta{color:#98a1b3;font-size:11px}
+table{border-collapse:collapse;width:100%}
+td,th{padding:5px 8px;border-bottom:1px solid #222634;text-align:left;font-size:12px}
+</style></head><body>
+
+<!-- Modelled on the live draft room, Sep 2026 (screenshot).
+     The point of this fixture is DEPTH and NEIGHBOURS, not text:
+       * a pick sits 7 elements below the list, so climbing 8 levels from the
+         "RB - Ind - Bye 13" line runs out before it reaches the list;
+       * manager names are interleaved between picks;
+       * a 20-row available-players table is on the same page, and its rank
+         column is a bare integer too -- so anything that keys on "a small
+         integer" alone will bind the wrong thing.
+     The available table puts the NAME first, so none of its rows parse a pick
+     number. That asymmetry is the whole discriminator. -->
+
+<div id="left">
+  <div class="hd">Last: S. BARKLEY (RB • PHI)</div>
+  <div class="tabs"><button>Queue</button><button>Picks</button></div>
+  <div id="picksScroll"><div class="inner"><div id="picklog">
+    <div class="mgr">nicholas</div>
+    <div class="pickWrap"><div class="a"><div class="b"><div class="c"><div class="pickInner"><div class="d"><div class="row">
+      <span class="num">5</span>
+      <div class="who"><div class="nameRow"><span class="nm">P. NACUA</span><span class="badge">Q</span></div>
+      <div class="meta">WR • LAR • Bye 11</div></div>
+    </div></div></div></div></div></div></div>
+    <div class="mgr">jeff</div>
+    <div class="pickWrap"><div class="a"><div class="b"><div class="c"><div class="pickInner"><div class="d"><div class="row">
+      <span class="num">6</span>
+      <div class="who"><div class="nameRow"><span class="nm">J. TAYLOR</span></div>
+      <div class="meta">RB • Ind • Bye 13</div></div>
+    </div></div></div></div></div></div></div>
+    <div class="mgr">Derek</div>
+    <div class="pickWrap"><div class="a"><div class="b"><div class="c"><div class="pickInner"><div class="d"><div class="row">
+      <span class="num">7</span>
+      <div class="who"><div class="nameRow"><span class="nm">S. BARKLEY</span></div>
+      <div class="meta">RB • Phi • Bye 10</div></div>
+    </div></div></div></div></div></div></div>
+  </div></div></div>
+</div>
+
+<div id="centre">
+  <table id="avail"><thead><tr><th>Player</th><th>XRank</th><th>ADP</th><th>Bye</th><th>Proj Pts</th></tr></thead>
+  <tbody id="availBody"></tbody></table>
+</div>
+
+<script>
+// 20 available players, name first then integer columns -- exactly the shape
+// that must NOT look like a pick log.
+[["C. MCCAFFREY","RB • SF • Bye 8",6,5.9,8,270.07],
+ ["J. SMITH-NJIGBA","WR • Sea • Bye 11",8,7.2,11,261.43],
+ ["J. COOK III","RB • Buf • Bye 7",9,9.4,7,242.74],
+ ["K. WALKER III","RB • KC • Bye 5",11,15.4,5,220.38],
+ ["B. ROBINSON","RB • Atl • Bye 5",1,1.2,5,299.10],
+ ["J. GIBBS","RB • Det • Bye 6",2,2.1,6,291.00],
+ ["J. CHASE","WR • Cin • Bye 6",3,3.0,6,288.40],
+ ["A. ST. BROWN","WR • Det • Bye 6",4,4.4,6,271.20],
+ ["N. COLLINS","WR • Hou • Bye 6",12,12.9,6,215.00],
+ ["T. MCBRIDE","TE • Ari • Bye 8",13,14.0,8,210.30],
+ ["L. MCCONKEY","WR • LAC • Bye 12",14,16.2,12,205.10],
+ ["D. LONDON","WR • Atl • Bye 5",15,17.1,5,203.60],
+ ["B. NIX","QB • Den • Bye 12",16,18.8,12,300.20],
+ ["K. PITTS","TE • Atl • Bye 5",17,19.9,5,180.40],
+ ["C. OLAVE","WR • NO • Bye 11",18,21.3,11,178.00],
+ ["T. HIGGINS","WR • Cin • Bye 6",19,22.7,6,176.50],
+ ["J. DANIELS","QB • Was • Bye 14",20,23.1,14,295.00],
+ ["K. WILLIAMS","RB • LAR • Bye 11",21,25.4,11,174.20],
+ ["G. WILSON","WR • NYJ • Bye 9",22,26.8,9,172.90],
+ ["D. ACHANE","RB • Mia • Bye 12",23,27.0,12,171.10]
+].forEach(function (r) {
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><div class="nm">' + r[0] + '</div><div class="meta">' + r[1] + '</div></td>' +
+    '<td>' + r[2] + '</td><td>' + r[3] + '</td><td>' + r[4] + '</td><td>' + r[5] + '</td>';
+  document.getElementById('availBody').appendChild(tr);
+});
+
+// Add a pick the way Yahoo does: same depth, manager name first.
+window.addDeepPick = function (num, mgr, name, meta) {
+  var log = document.getElementById('picklog');
+  var m = document.createElement('div'); m.className = 'mgr'; m.textContent = mgr;
+  var w = document.createElement('div'); w.className = 'pickWrap';
+  w.innerHTML = '<div class="a"><div class="b"><div class="c"><div class="pickInner">' +
+    '<div class="d"><div class="row"><span class="num">' + num +
+    '</span><div class="who"><div class="nameRow"><span class="nm">' + name +
+    '</span></div><div class="meta">' + meta + '</div></div></div></div>' +
+    '</div></div></div></div>';
+  log.appendChild(m); log.appendChild(w);
+};
+</script>
+</body></html>

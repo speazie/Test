@@ -1226,9 +1226,18 @@ const RE_PICK_NUM = /^\s*(\d{1,3})(?![\d.:])/;
 // CASE-INSENSITIVE. Yahoo renders these title-case -- "RB • Det • Bye 6" --
 // so an uppercase-only pattern stripped the position but left the team behind
 // as a residual "name". "Ind" then matched the Indianapolis defence.
-const RE_POS = /\b(QB|RB|WR|TE|K|DEF|DST|D\/ST)\b/i;
+// The (?!\.) matters more than it looks: without it the "K" in "K. WALKER III"
+// is read as the kicker position, the initial is eaten, and the real position
+// later in the row survives into the name.
+const RE_POS = /\b(QB|RB|WR|TE|K|DEF|DST|D\/ST)\b(?!\.)/i;
+const RE_POS_G = new RegExp(RE_POS.source, "gi");
 const RE_TEAM = /\b(ARI|ATL|BAL|BUF|CAR|CHI|CIN|CLE|DAL|DEN|DET|GB|HOU|IND|JAX|KC|LAC|LAR|LV|MIA|MIN|NE|NO|NYG|NYJ|PHI|PIT|SEA|SF|TB|TEN|WAS)\b/i;
 const RE_TEAM_G = new RegExp(RE_TEAM.source, "gi");
+// Yahoo hangs a status badge off the name -- "P. NACUA [Q]" -- in its own
+// element, so it lands at the end of the name after everything else is
+// stripped, and "P. NACUA Q" matched NOTHING. Only trailing badges are
+// removed: a leading single letter is an initial, not a status.
+const RE_BADGE = /(?:\s+(?:Q|O|D|P|IR|SUS|PUP|GTD|DTD|NA|NFI))+$/i;
 
 // textContent glues adjacent elements together: "<span>1.01</span>Bijan" reads
 // as "1.01Bijan", which matches neither a pick number nor a name. Walking the
@@ -1292,9 +1301,15 @@ function parseRow(text) {
   // Strip the tokens the matcher should not see as part of the name.
   const name = text
     .replace(RE_PICK_DOT, " ").replace(RE_PICK_WORD, " ").replace(RE_PICK_NUM, " ")
-    .replace(RE_POS, " ").replace(RE_TEAM_G, " ")
+    .replace(RE_POS_G, " ").replace(RE_TEAM_G, " ")
     .replace(/\b(bye|adp|rank|pts|proj|round)\b.*$/i, " ")
-    .replace(/\s+/g, " ").trim();
+    // Separators are not name characters, and they were what stopped the badge
+    // from being stripped: "P. NACUA Q \u2022 \u2022" does not end in a badge, so
+    // the whole row failed to match while the bare name next to it succeeded --
+    // taking the pick NUMBER out of the read with it.
+    .replace(/[\u2022\u00B7|\u2013\u2014,()\[\]]+/g, " ")
+    .replace(/\s+/g, " ").trim()
+    .replace(RE_BADGE, "").trim();
   return { pick, pos, team: tm ? tm[1] : null, name };
 }
 
@@ -1310,9 +1325,16 @@ function readRegion(el) {
     // A defence must be announced as one. Without this, a leftover team code
     // or city in a meta line ("• Ind •") matches that team's DST.
     if (m.p.p === "DST" && !/\b(DEF|DST|D\/ST)\b/i.test(row.text)) continue;
-    // Below this the read is noise -- manager names, UI labels, ad copy. It is
-    // not worth a confirmation tap, so it is not queued at all.
+    // Below this the read is noise -- UI labels, ad copy. It is not worth a
+    // confirmation tap, so it is not queued at all.
     if (m.conf < MIN_READ) continue;
+    // A manager's name sits between the picks and IS a person's name: "jeff"
+    // fuzzy-matched Justin Jefferson at 75% and took his slot on the board.
+    // Every pick row carries a position or a team; a manager row carries
+    // neither. Where neither is present, demand a confident match on a name
+    // with two parts to it -- which "jeff", "Landon" and "Team 3" are not.
+    if (!info.pos && !info.team &&
+        (m.conf < 0.9 || info.name.split(/\s+/).filter(t => t.length > 1).length < 2)) continue;
     dedupe.add(m.p.n);
     out.push({ player: m.p, conf: m.conf, pick: info.pick, alts: m.alts || [],
                raw: row.text, stale: m.stale || null });
@@ -1334,10 +1356,19 @@ function readRegion(el) {
 // sees the most pick-numbered rows: going higher adds names but no new pick
 // numbers, which is exactly the signal that we have left the log.
 const MAX_REGION = 60;
+// How far to climb. This was 8, which sounds generous and is not: the live room
+// puts SIX styled wrappers between the pick row and the list, so a click on the
+// "RB - Ind - Bye 13" line ran out of levels while still inside one pick, every
+// level read zero players, and the bind landed on that line -- "bound", empty,
+// silent. Climbing is cheap because MAX_SUBTREE stops it dead at the first
+// wrapper big enough to hold the available-players list.
+const MAX_CLIMB = 16;
+const MAX_SUBTREE = 1200;      // elements; above this we are out of the log
 function resolveContainer(el) {
   const levels = [];
   let n = el;
-  for (let up = 0; up < 8 && n && n !== document.body; up++) {
+  for (let up = 0; up < MAX_CLIMB && n && n !== document.body; up++) {
+    if (n.getElementsByTagName && n.getElementsByTagName("*").length > MAX_SUBTREE) break;
     const reads = readRegion(n);
     levels.push({ el: n, all: reads.length, withPick: reads.filter(r => r.pick).length });
     n = n.parentElement;
@@ -1381,6 +1412,94 @@ function resolveContainer(el) {
   return best.el;
 }
 
+// ---- finding the list without being told where it is ----
+// Aiming is the weak link: you click a name or a bye-week line, and everything
+// depends on climbing out of it correctly. This starts from the opposite end
+// and needs no click at all.
+//
+// Every element whose OWN text is just a small integer is a candidate pick
+// number. The pick log is then the smallest ancestor of those that sees the
+// most numbered player rows. The available-players table cannot win: its rank
+// column is a bare integer too, but its rows put the NAME first, so not one of
+// them parses a pick number, and the table as a whole reads far more players
+// than MAX_REGION.
+function autoFindPickList() {
+  const seeds = [];
+  const all = document.body.getElementsByTagName("*");
+  for (let i = 0; i < all.length && seeds.length < 300; i++) {
+    const e = all[i];
+    if (e.children.length) continue;                 // leaves only, so this stays cheap
+    if (HOST && HOST.contains(e)) continue;          // never our own panel
+    const t = (e.textContent || "").trim();
+    if (!/^\d{1,3}$/.test(t)) continue;
+    const v = +t;
+    if (v >= 1 && v <= 150) seeds.push(e);
+  }
+
+  const tried = new Set();
+  let numbered = null, plain = null;
+  const consider = n => {
+    if (tried.has(n)) return true;
+    tried.add(n);
+    if (n.getElementsByTagName("*").length > MAX_SUBTREE) return false;  // stop climbing
+    const reads = readRegion(n);
+    if (reads.length < 2 || reads.length > MAX_REGION) return true;
+    const withPick = reads.filter(r => r.pick).length;
+    const cand = { el: n, withPick: withPick, all: reads.length };
+    if (withPick >= 2) {
+      if (!numbered || cand.withPick > numbered.withPick ||
+          (cand.withPick === numbered.withPick && cand.all < numbered.all)) numbered = cand;
+    } else if (!plain || cand.all < plain.all) {
+      plain = cand;
+    }
+    return true;
+  };
+
+  for (const seed of seeds) {
+    let n = seed.parentElement;
+    for (let up = 0; up < MAX_CLIMB && n && n !== document.body; up++, n = n.parentElement) {
+      if (!consider(n)) break;
+    }
+  }
+  // A numbered list is a pick log. A list with no numbers might be one too --
+  // some rooms only number the current pick -- so it is offered second rather
+  // than not at all.
+  const best = numbered || plain;
+  return best ? { el: best.el, picks: best.withPick, players: best.all } : null;
+}
+
+function bindTo(el, how) {
+  BR.el = el;
+  BR.path = elPath(el);
+  // Everything already visible here is the state BEFORE we started watching.
+  // Seed it as "seen" but do not commit it; joining mid-draft, the user imports
+  // it explicitly with one tap.
+  const found = scanRegion();
+  BR.pending = [];
+  BR.preload = found;
+  BR.note = describeBind(found.length, how);
+  renderBridgePanel();
+  renderBridge();
+  return found.length;
+}
+
+// The panel used to say "ARM and the next pick will come in automatically" even
+// when it was already armed and there was no ARM button to press -- which is
+// exactly the sort of thing you cannot debug at 9:31pm.
+function describeBind(n, how) {
+  const where = how ? how + " " : "";
+  if (!n) {
+    return where + "Bound, but it reads nothing there yet. " +
+      (BR.armed ? "Already live — a pick appearing in it will come in by itself. "
+                : "ARM and the next pick will come in automatically. ") +
+      "If picks are already showing on the board, this is the wrong region: " +
+      "tap FIND IT, or DIAGNOSE to see what it is looking at.";
+  }
+  return where + "Bound. " + n + " player" + (n > 1 ? "s" : "") + " already on the board — " +
+    "IMPORT " + (n > 1 ? "them" : "him") +
+    (BR.armed ? "." : ", or ARM to only take picks from here on.");
+}
+
 // One pass over the bound container. Returns the reads it has not seen before.
 function scanRegion() {
   if (!BR.el || !document.contains(BR.el)) {
@@ -1399,7 +1518,13 @@ function scanRegion() {
 function bridgeTick() {
   if (!BR.armed || BR.paused) return;
   const fresh = scanRegion();
-  if (!fresh.length) { if (BR.el) bridgeSeen = Date.now(); return; }
+  if (!fresh.length) {
+    // The status line at the top only redraws when something calls it, so
+    // without this the panel sat on "Board bridge not connected" while the
+    // bridge was in fact live and simply had nothing new to report.
+    if (BR.el) { const first = !bridgeSeen; bridgeSeen = Date.now(); if (first) renderBridge(); }
+    return;
+  }
   bridgeSeen = Date.now();
 
   // A burst means the container is probably the available-players list, not the
@@ -1497,11 +1622,17 @@ function stopPick() {
   document.removeEventListener("keydown", onPickKey, true);
   if (reopenAfterPick && typeof PANEL !== "undefined") { reopenAfterPick = false; PANEL.set(true); }
 }
+let hoverLast = 0, hoverEl = null;
 function onHover(e) {
   const el = e.target;
   if (!el || el === hiBox || HOST.contains(el)) return;
   // Outline what would ACTUALLY be bound, not the leaf under the cursor, so
-  // there is no surprise about what got picked.
+  // there is no surprise about what got picked. Resolving now climbs up to 16
+  // levels and reads each one, which is far too much work to redo on every
+  // pixel of pointer movement.
+  const now = Date.now();
+  if (el === hoverEl && now - hoverLast < 120) return;
+  hoverEl = el; hoverLast = now;
   const r = resolveContainer(el).getBoundingClientRect();
   hiBox.style.left = r.left + "px"; hiBox.style.top = r.top + "px";
   hiBox.style.width = r.width + "px"; hiBox.style.height = r.height + "px";
@@ -1512,19 +1643,27 @@ function onPickClick(e) {
   e.preventDefault(); e.stopPropagation();
   const el = resolveContainer(e.target);
   stopPick();
-  BR.el = el;
-  BR.path = elPath(el);
-  // Everything already visible in this region is the state BEFORE we started
-  // watching. Seed it as "seen" but do not commit it — joining mid-draft, the
-  // user imports it explicitly with one tap.
-  const found = scanRegion();
-  BR.pending = [];
-  BR.note = found.length
-    ? "Bound. " + found.length + " players already on the board — IMPORT them, or " +
-      "ARM to only take picks from here on."
-    : "Bound, and it is empty right now. ARM and the next pick will come in automatically.";
-  BR.preload = found;
+  if (bindTo(el, "") === 0) {
+    // Climbing found nothing where you clicked. Rather than sit there saying
+    // "bound" and reading zero, go and look for the list.
+    const auto = autoFindPickList();
+    if (auto && auto.el !== el) bindTo(auto.el, "Your tap read nothing, so I found the list myself:");
+  }
+}
+
+function findItForMe() {
+  BR.note = "Looking for the pick list…";
   renderBridgePanel();
+  const auto = autoFindPickList();
+  if (!auto) {
+    BR.note = "Could not find a pick list on this page. If picks are showing, " +
+      "tap BIND THE PICK LIST and click directly on one of them, then DIAGNOSE.";
+    renderBridgePanel();
+    return;
+  }
+  bindTo(auto.el, "Found a list of " + auto.players + " player" + (auto.players > 1 ? "s" : "") +
+    (auto.picks ? " with pick numbers." : " (no pick numbers in it).") +
+    " Check it with DIAGNOSE if anything looks off.");
 }
 function importPreload() {
   const list = BR.preload || [];
@@ -1563,6 +1702,10 @@ function armOnly() {
 function brEsc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+function brTag(el) {
+  const cls = String(el.className || "").split(/\s+/)[0];
+  return el.tagName.toLowerCase() + (el.id ? "#" + el.id : cls ? "." + cls : "");
+}
 let brDiag = null;
 function diagnose() {
   if (brDiag) { brDiag = null; renderBridgePanel(); return; }
@@ -1588,9 +1731,8 @@ function diagnose() {
     }
     lines.push({ raw: row.text.slice(0, 70), verdict: verdict });
   }
-  const cls = String(BR.el.className || "").split(/\s+/)[0];
   brDiag = {
-    tag: BR.el.tagName.toLowerCase() + (cls ? "." + cls : ""),
+    tag: brTag(BR.el),
     rows: rows.length,
     reads: readRegion(BR.el).length,
     lines: lines,
@@ -1610,9 +1752,17 @@ function renderBridgePanel() {
   if (BR.el && !BR.armed) h += '<button id="brArm">ARM</button>';
   if (BR.armed && !BR.paused) h += '<button id="brPause">PAUSE</button>';
   if (BR.paused) h += '<button id="brResume">RESUME</button>';
+  h += '<button id="brFind">FIND IT</button>';
   h += '<button id="brRescan">RESCAN</button>';
   h += '<button id="brWhy">' + (brDiag ? "HIDE DIAG" : "DIAGNOSE") + '</button>';
   h += '</div>';
+  // Always visible, so "LIVE but reading nothing" can never look like "working".
+  if (BR.el) {
+    const live = readRegion(BR.el).length;
+    h += '<div class="brpr" style="margin-top:6px">watching &lt;' + brEsc(brTag(BR.el)) +
+      '&gt; — <b>' + live + '</b> player' + (live === 1 ? '' : 's') + ' readable in it' +
+      (live ? '' : '  ← that is the problem') + '</div>';
+  }
   if (brDiag) {
     h += '<div class="brhd" style="margin-top:8px">WHAT THE READER SEES</div>';
     h += '<div class="brpr">bound &lt;' + brEsc(brDiag.tag) + '&gt; — ' + brDiag.rows +
@@ -1642,6 +1792,7 @@ function renderBridgePanel() {
   if (B("brArm")) B("brArm").onclick = armOnly;
   if (B("brPause")) B("brPause").onclick = () => { BR.paused = true; renderBridgePanel(); };
   if (B("brResume")) B("brResume").onclick = () => { BR.paused = false; BR.note = ""; renderBridgePanel(); };
+  if (B("brFind")) B("brFind").onclick = findItForMe;
   if (B("brRescan")) B("brRescan").onclick = () => { BR.lastCount = 0; bridgeTick(); };
   if (B("brWhy")) B("brWhy").onclick = diagnose;
   box.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => confirmPending(+b.getAttribute("data-ok"), false));
@@ -1654,6 +1805,20 @@ function renderBridgePanel() {
 // backstop for the case that actually bites: Yahoo replacing the whole subtree,
 // which detaches the observer without any error.
 loadBridge();
+
+// Try to find the pick list without being asked. Nothing is committed by this
+// -- binding only decides where to LOOK; importing and arming are still
+// deliberate taps -- so the worst case is a wrong region you rebind, and the
+// best case is that draft night needs no setup at all. Retried a few times
+// because the draft room renders its sidebar well after the script runs.
+[1500, 5000, 12000].forEach(ms => setTimeout(() => {
+  if (BR.el || picking) return;
+  const auto = autoFindPickList();
+  if (!auto) return;
+  bindTo(auto.el, "Found the pick list on my own (" + auto.players + " player" +
+    (auto.players > 1 ? "s" : "") + " in it).");
+}, ms));
+
 new MutationObserver(() => { if (BR.armed && !BR.paused) bridgeTick(); })
   .observe(document.body, { childList: true, subtree: true, characterData: true });
 setInterval(() => { if (BR.armed && !BR.paused) bridgeTick(); }, 1500);
@@ -1665,6 +1830,7 @@ if (BR.armed) bridgeTick();
 // is actually reading when something looks wrong. Console-only, no UI.
 window.__sstlv = {
   BR, scanRegion, bridgeTick, matchBoardName, searchPlayers, ingestPick, diagnose,
+  autoFindPickList, findItForMe, resolveContainer,
   curPick, desync, likelyNext,
   state: () => ({
     bound: !!BR.el, armed: BR.armed, paused: BR.paused,
