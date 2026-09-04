@@ -719,7 +719,16 @@ function matchBoardName(raw,hint){
   else conf=0.35;
   // Ambiguous on the name and NOT separated by the hints: this is the case that
   // silently corrupts the board, so it must never clear the auto-commit bar.
-  if(tied.length>1&&sep<=0) conf=Math.min(conf,0.5);
+  // Two men can be identical on name, position AND team: Bijan Robinson and
+  // Brian Robinson are both Atlanta running backs, so "B. ROBINSON RB ATL"
+  // describes them equally well and the hints separate nothing. What separates
+  // them is that one goes first overall and the other goes undrafted. A board
+  // rank that far apart IS separation, and refusing to use it left the best
+  // player in the draft sitting in the confirm strip waiting for a tap, every
+  // single time.
+  const gulf = runner ? Math.abs(boardRank(runner.p)-boardRank(top.p)) : 999;
+  if(tied.length>1&&sep<=0&&gulf<60) conf=Math.min(conf,0.5);
+  else if(tied.length>1&&sep<=0) conf=Math.min(conf,0.9);   // separated, but not by name
   // An EXACT, unique full-name match identifies a player outright in a pool of
   // 237. If Yahoo then disagrees about his team, by far the likeliest
   // explanation is that our team field is stale — players change teams every

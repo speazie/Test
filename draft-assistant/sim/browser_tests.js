@@ -592,6 +592,30 @@ function ok(label, cond, detail) {
       !reads.find(r => r.n === 'Tee Higgins').yours);
     ok('a manager who left is not a player',
       reads.length === 3, reads.map(r => r.n).join(', '));
+
+    // Bijan Robinson and Brian Robinson are BOTH Atlanta running backs, so
+    // "B. ROBINSON RB ATL" describes them equally well and position and team
+    // separate nothing. Confidence was capped at 0.74, under the auto-commit
+    // bar, so the best player in the draft went to the confirm strip every
+    // time and read as "not recognised".
+    const one = (num, name, meta) => page.evaluate(a => {
+      const d = document.createElement('div');
+      d.innerHTML = "<div class='row'><span>" + a[0] + "</span><span>" + a[1] +
+                    "</span><span>" + a[2] + "</span></div>";
+      document.body.appendChild(d);
+      const out = window.__sstlv.readRegion(d).map(x => ({ n: x.player.n, c: x.conf }));
+      d.remove(); return out;
+    }, [num, name, meta]);
+
+    let r = await one('1', 'B. ROBINSON', 'RB • Atl • Bye 5');
+    ok('"B. ROBINSON" is Bijan, and confident enough to commit itself',
+      r.length === 1 && r[0].n === 'Bijan Robinson' && r[0].c >= 0.85, JSON.stringify(r));
+    r = await one('9', 'J. WILLIAMS', 'RB • Dal • Bye 10');
+    ok('but a namesake the hints CAN separate still resolves by them',
+      r.length === 1 && r[0].n === 'Javonte Williams', JSON.stringify(r));
+    r = await one('9', 'J. WILLIAMS', 'WR • Det • Bye 6');
+    ok('and separates the other way too',
+      r.length === 1 && r[0].n === 'Jameson Williams', JSON.stringify(r));
     await page.close();
   }
 

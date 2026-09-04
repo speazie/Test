@@ -542,10 +542,13 @@ onReset = function () {
   // put the wrong region straight back. Nothing is taken from the board again
   // until you deliberately IMPORT or ARM.
   BR.armed = false;
-  BR.note = "Board cleared and reading stopped. Check the region, then IMPORT " +
-            "or ARM to start again.";
   saveBridge();
-  renderBridgePanel();
+  // Re-read the region straight away so the panel comes back with a live
+  // IMPORT button. Disarming is right -- otherwise the next tick re-commits
+  // the board you just cleared -- but leaving the user with a bound, silent
+  // bridge and no obvious way back is not.
+  if (BR.el && document.contains(BR.el)) bindTo(BR.el, "Board cleared.");
+  else { BR.note = "Board cleared. Bind the pick list again."; renderBridgePanel(); }
 };
 
 function saveBridge() {
@@ -727,13 +730,24 @@ function diagnose() {
 function renderBridgePanel() {
   const box = UIROOT.getElementById("brPanel");
   if (!box) return;
-  const state = !BR.el ? "unbound" : BR.paused ? "paused" : BR.armed ? "live" : "bound";
+  const state = !BR.el ? "unbound" : BR.paused ? "paused" : BR.armed ? "live" : "not reading";
   let h = '<div class="brhd">BOARD BRIDGE — <b>' + state.toUpperCase() + '</b></div>';
+  // "BOUND" reads like success. It is not: a bound bridge that is not armed
+  // takes nothing off the board, and the only sign of it was a word that
+  // sounded fine. Say what is actually happening.
+  if (BR.el && !BR.armed && !BR.paused) {
+    h += '<div class="brnote" style="color:#F5C518"><b>Picks are NOT being taken ' +
+         'from the board yet.</b> Tap ' +
+         (BR.preload && BR.preload.length ? 'IMPORT to take the ' + BR.preload.length +
+            ' already made, or ARM' : 'ARM') +
+         ' to start from the next one.</div>';
+  }
   if (BR.note) h += '<div class="brnote">' + BR.note + '</div>';
   h += '<div class="brbtns">';
-  h += '<button id="brBind">' + (BR.el ? "REBIND REGION" : "BIND THE PICK LIST") + '</button>';
+  // Whatever gets the bridge reading goes first, where the eye lands.
   if (BR.preload && BR.preload.length) h += '<button id="brImport">IMPORT ' + BR.preload.length + '</button>';
   if (BR.el && !BR.armed) h += '<button id="brArm">ARM</button>';
+  h += '<button id="brBind">' + (BR.el ? "REBIND REGION" : "BIND THE PICK LIST") + '</button>';
   if (BR.armed && !BR.paused) h += '<button id="brPause">PAUSE</button>';
   if (BR.paused) h += '<button id="brResume">RESUME</button>';
   h += '<button id="brFind">FIND IT</button>';
