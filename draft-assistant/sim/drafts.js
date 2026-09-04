@@ -8,7 +8,8 @@ const OMAX={QB:2,RB:6,WR:7,TE:2,K:1,DST:1}, OREQ={QB:1,RB:2,WR:2,TE:1,K:1,DST:1}
 function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
 function runDraft(mySlot){
-  const A=fresh();A.setSlot(mySlot);
+  // SSTLV_PLAN=0 drafts greedily, =1 (default) plans the route ahead.
+  const A=fresh(undefined,undefined,process.env.SSTLV_PLAN!=='0');A.setSlot(mySlot);
   const mySet=new Set(A.myPicks());
   const rost={}; for(let t=1;t<=TEAMS;t++) rost[t]=[];
   const cnt={}; for(let t=1;t<=TEAMS;t++) cnt[t]={};

@@ -38,7 +38,8 @@ const BR_KEY = "sstlv-bridge-v1";
 // list of already-read players from a mock draft are worse than useless in the
 // real room -- the seen-set would suppress the real picks.
 const BKEY = BR_KEY + ":" + DRAFT_ID;
-const BURST_LIMIT = 5;   // more additions than this in one scan = wrong region
+const BURST_LIMIT = 5;    // unnumbered additions in one scan = wrong region
+const BURST_NUMBERED = 30; // numbered rows can arrive in a rush just from scrolling
 
 // ---- locating the container again after a reload ----
 function elPath(el) {
@@ -73,7 +74,12 @@ const RE_PICK_WORD = /\bpick\s*#?\s*(\d{1,3})\b/i;        // Pick 27
 // row -- "2  J. GIBBS" -- not round.pick. Without this the reader finds no
 // pick numbers at all, which is what makes container resolution fall back to
 // its weakest heuristic and bind the wrong element.
-const RE_PICK_NUM = /^\s*(\d{1,3})(?![\d.:])/;
+// The pick number is at the START of the row -- unless a wrapper swallowed the
+// manager label sitting above it, in which case the row reads "You 37 J. PRICE"
+// and the anchored pattern finds nothing. One short leading word is allowed
+// before the number for exactly that case; more than that and a stray figure
+// somewhere in the row would start moving the pick counter.
+const RE_PICK_NUM = /^\s*(?:[A-Za-z][A-Za-z'.\-]{0,14}\s+)?(\d{1,3})(?![\d.:])/;
 // CASE-INSENSITIVE. Yahoo renders these title-case -- "RB • Det • Bye 6" --
 // so an uppercase-only pattern stripped the position but left the team behind
 // as a residual "name". "Ind" then matched the Indianapolis defence.
@@ -169,9 +175,17 @@ function parseRow(text) {
 }
 
 // Every pool player currently readable inside `el`. Pure: no state touched.
+// Yahoo labels the manager above each pick, and for your own picks that label
+// is the word "You". That is a far better ownership signal than a pick number:
+// it survives a layout with no numbers at all, it cannot drift out of step with
+// the board, and it is right even when the pick counter is not.
+const RE_YOU = /^\s*(you|your\s+pick|me)\s*$/i;
+function isYouLabel(t) { return RE_YOU.test(t); }
+
 function readRegion(el) {
   const out = [];
   const dedupe = new Set();
+  let lastLabel = "";        // the manager whose pick comes next
   for (const row of rowsOf(el)) {
     const info = parseRow(row.text);
     // A defence is identified by its TEAM, never by what the board calls it.
@@ -183,13 +197,34 @@ function readRegion(el) {
       const d = PLAYERS.find(x => x.p === "DST" && norm(x.t) === norm(info.team));
       if (d && !dedupe.has(d.n)) {
         dedupe.add(d.n);
-        out.push({ player: d, conf: 1, pick: info.pick, alts: [], raw: row.text, stale: null });
+        const yoursD = isYouLabel(lastLabel) || /^\s*you\b/i.test(row.text);
+        lastLabel = "";
+        out.push({ player: d, conf: 1, pick: info.pick, alts: [], raw: row.text,
+                   stale: null, yours: yoursD });
       }
       continue;
     }
-    if (!plausibleName(info.name)) continue;
+    if (!plausibleName(info.name)) {
+      // Short rows that match no player are manager labels. Remember the last
+      // one: it belongs to the pick underneath it.
+      if (row.text.length <= 24) lastLabel = row.text;
+      continue;
+    }
     const m = matchBoardName(info.name, { pos: info.pos, team: info.team });
-    if (!m.p || dedupe.has(m.p.n)) continue;
+    if (!m.p) continue;
+    if (dedupe.has(m.p.n)) {
+      // The same pick shows up as several nested rows. The outer one comes
+      // first in document order and can lack the pick number that the inner one
+      // has -- and a missing number silently shifts ownership onto the NEXT
+      // pick. So let a later row upgrade what we already hold.
+      const held = out.find(o => o.player.n === m.p.n);
+      if (held) {
+        if (held.pick == null && info.pick != null) held.pick = info.pick;
+        if (!held.yours && (isYouLabel(lastLabel) || /^\s*you\b/i.test(row.text))) held.yours = true;
+      }
+      lastLabel = "";
+      continue;
+    }
     // A defence must be announced as one. Without this, a leftover team code
     // or city in a meta line ("• Ind •") matches that team's DST.
     if (m.p.p === "DST" && !/\b(DEF|DST|D\/ST)\b/i.test(row.text)) continue;
@@ -204,8 +239,12 @@ function readRegion(el) {
     if (!info.pos && !info.team &&
         (m.conf < 0.9 || info.name.split(/\s+/).filter(t => t.length > 1).length < 2)) continue;
     dedupe.add(m.p.n);
+    // "You" either sits in the row itself (a wrapper that swallowed the label)
+    // or on the label row immediately above it.
+    const yours = isYouLabel(lastLabel) || /^\s*you\b/i.test(row.text);
+    lastLabel = "";
     out.push({ player: m.p, conf: m.conf, pick: info.pick, alts: m.alts || [],
-               raw: row.text, stale: m.stale || null });
+               raw: row.text, stale: m.stale || null, yours: yours });
   }
   return out;
 }
@@ -429,10 +468,20 @@ function bridgeTick() {
 
   // A burst means the container is probably the available-players list, not the
   // pick log. Committing 200 players would destroy the board, so stop instead.
-  if (fresh.length > BURST_LIMIT && BR.lastCount > 0) {
+  // A burst used to mean "wrong container" and always paused. But a pick log
+  // that virtualises hands you six rows at once the moment you scroll it, and
+  // pausing there is how picks get missed: the panel sits paused, the board
+  // moves on, and nothing is committed. Distinct pick numbers say it really is
+  // a pick log, so only an unnumbered burst -- which we cannot check -- or an
+  // implausibly large one still stops the bridge.
+  const nums = fresh.filter(f => f.pick).map(f => f.pick);
+  const numbered = nums.length === fresh.length && new Set(nums).size === nums.length;
+  const limit = numbered ? BURST_NUMBERED : BURST_LIMIT;
+  if (fresh.length > limit && BR.lastCount > 0) {
     BR.paused = true;
     BR.note = fresh.length + " new names at once — that looks like the available " +
-              "list, not the pick log. Nothing was committed.";
+              "list, not the pick log. Nothing was committed. If it IS the pick " +
+              "log and you just scrolled it, tap RESUME.";
     renderBridgePanel();
     return;
   }
@@ -449,7 +498,9 @@ function bridgeTick() {
     // layout where the number is not inside the row, NOTHING was ever
     // recognised as yours: an empty roster and "15 picks left" all draft.
     const at = f.pick || curPick();
-    const isMine = myPickSet.has(at);
+    // The board saying "You" is direct evidence; the pick number is inference.
+    // Prefer the evidence.
+    const isMine = f.yours || myPickSet.has(at);
     ingestPick(f.player.n, { src: "board", conf: f.conf, pick: at,
                              mine: isMine, note: f.stale });
   }
@@ -485,7 +536,14 @@ onReset = function () {
   BR.preload = [];
   BR.lastCount = 0;
   BR.paused = false;
-  BR.note = "Board cleared. IMPORT or ARM again when the region is right.";
+  // AND STOP READING. Clearing the seen-set while still armed meant the very
+  // next tick re-committed everything that had just been wiped -- so RESET
+  // looked broken, and the documented recovery from binding the WRONG region
+  // put the wrong region straight back. Nothing is taken from the board again
+  // until you deliberately IMPORT or ARM.
+  BR.armed = false;
+  BR.note = "Board cleared and reading stopped. Check the region, then IMPORT " +
+            "or ARM to start again.";
   saveBridge();
   renderBridgePanel();
 };
@@ -598,7 +656,8 @@ function importPreload() {
   for (const f of list) {
     BR.seen.add(f.player.n);
     const at = f.pick || curPick();
-    ingestPick(f.player.n, { src: "import", conf: f.conf, pick: at, mine: myPickSet.has(at) });
+    ingestPick(f.player.n, { src: "import", conf: f.conf, pick: at,
+                             mine: f.yours || myPickSet.has(at) });
   }
   BR.preload = [];
   BR.armed = true;

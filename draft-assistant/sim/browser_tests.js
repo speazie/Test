@@ -437,6 +437,8 @@ function ok(label, cond, detail) {
     ok('two taps clear the board', s.gone === 0, 'gone=' + s.gone);
     ok('and the pick feed with it', s.feed.length === 0, 'feed=' + s.feed.length);
     ok('and the bridge forgets what it had read', s.seen.length === 0, 'seen=' + s.seen.length);
+    ok('and it stops reading, so the board it just cleared is not re-committed',
+      s.armed === false, 'armed=' + s.armed);
 
     // The whole point: re-importing after a bad bind must actually re-import.
     await page.click('#sstlv-host >> #brFind');
@@ -551,6 +553,45 @@ function ok(label, cond, detail) {
     ok('later numberless picks keep going to the right side',
       s.mine.length === 1 && s.gone === 5,
       'mine=' + s.mine.join(', ') + ' gone=' + s.gone);
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nreading the live sidebar exactly as Yahoo writes it');
+  // ======================================================================
+  // Reported mid-draft, with a screenshot: pick 37 was the user's (J. Price),
+  // and the tool put pick 38 (T. Higgins, drafted by "Jd") on his roster
+  // instead. Two causes, both here.
+  {
+    const page = await browser.newPage();
+    await page.setContent(
+      "<div id='log'>" +
+      "<div class='grp'><div class='mgr'>Nelson</div><div class='sub'>Nelson left</div></div>" +
+      "<div class='grp'><div class='mgr'>You</div><div class='row'><span>37</span>" +
+        "<span>J. PRICE</span><span>RB • Sea • Bye 11</span></div></div>" +
+      "<div class='grp'><div class='mgr'>Jd</div><div class='row'><span>38</span>" +
+        "<span>T. HIGGINS</span><span>WR • Cin • Bye 6</span></div></div>" +
+      "<div class='grp'><div class='mgr'>Alex</div><div class='row'><span>39</span>" +
+        "<span>G. WILSON</span><span>WR • NYJ • Bye 13</span></div></div></div>");
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    const reads = await page.evaluate(() =>
+      window.__sstlv.readRegion(document.getElementById('log'))
+        .map(x => ({ n: x.player.n, pick: x.pick, yours: !!x.yours })));
+
+    // The manager label is its own line ABOVE the pick, and a wrapper row
+    // swallows both -- so the row reads "You 37 J. PRICE" and the anchored
+    // pick-number pattern found nothing. A pick with no number is assigned the
+    // tool's own counter, which is how the whole board slid one place.
+    ok('the pick number survives a manager label in front of it',
+      reads.map(r => r.pick).join(',') === '37,38,39', JSON.stringify(reads));
+    ok('"You" marks my pick, and only mine',
+      reads.filter(r => r.yours).map(r => r.n).join(',') === 'Jadarian Price',
+      JSON.stringify(reads.filter(r => r.yours).map(r => r.n)));
+    ok('the pick after mine is NOT mine',
+      !reads.find(r => r.n === 'Tee Higgins').yours);
+    ok('a manager who left is not a player',
+      reads.length === 3, reads.map(r => r.n).join(', '));
     await page.close();
   }
 

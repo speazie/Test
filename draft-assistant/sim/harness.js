@@ -167,16 +167,17 @@ function engineSource() {
 
 // Build an engine instance from an explicit source string. Used by the
 // fingerprint tool to load a deliberately-old build for comparison.
-function freshFrom(js, cfg, exports) {
+function freshFrom(js, cfg, exports, plan) {
   installDom();
   const names = exports || DEFAULT_EXPORTS;
-  return new Function('CFG_OVERRIDE', js + '\nreturn {' + names + '};')(cfg);
+  return new Function('CFG_OVERRIDE', 'PLAN_OVERRIDE',
+    js + '\nreturn {' + names + '};')(cfg, plan);
 }
 
 // Build a fresh, isolated instance of the CURRENT build. Gated on freshness.
 // cfg: optional CFG_OVERRIDE object for the optimiser.
-function fresh(cfg, exports) {
-  return freshFrom(engineSource(), cfg, exports);
+function fresh(cfg, exports, plan) {
+  return freshFrom(engineSource(), cfg, exports, plan);
 }
 
 module.exports = {

@@ -1,5 +1,12 @@
 // Tunable weights. These were previously hardcoded from intuition; they are now
 // optimised against simulated championship rate (see optimise.js).
+// Forward planning can be turned off, so greedy and planned drafting can be
+// run against each other. Both use identical projections, so unlike a
+// projection change this comparison is a fair test.
+// A function parameter is 'defined' even when nothing was passed for it, so a
+// typeof check alone silently turned planning OFF everywhere the harness
+// builds an instance -- including every regression test.
+var PLAN = (typeof PLAN_OVERRIDE==='undefined'||PLAN_OVERRIDE==null) ? true : !!PLAN_OVERRIDE;
 var CFG = (typeof CFG_OVERRIDE!=='undefined') ? CFG_OVERRIDE : {"bye2": 14, "bye3": 26, "bye4": 70, "byeAll": 5, "byeNoCover": 7, "byeCover": 9, "reachFree": 8, "reachRate": 0.6, "cuffMult": 0.45, "cuffTop": 70, "cuff": 40, "conc": 10, "stack": 7, "dropMin": 10, "dropMult": 0.55, "dropCap": 30, "runCap": 22, "runRate": 45, "coldPen": 8, "scarMin": 6, "scarMax": 48, "benchWR": 12, "benchRB": 6, "rb5pen": 14,
   // Previously hardcoded OUTSIDE CFG, so sim/optimise.js never saw them and
   // they were never tested. Defaults below are the exact prior values, so
@@ -265,12 +272,189 @@ function score(p,pick,rnd){
   }
   return {p,s,why};
 }
+// ============================================================================
+// FORWARD PLANNING — what TEAM does this pick lead to?
+//
+// The scorer prices one pick, with a one-step glance at what survives to the
+// next. That is not how a draft is won. Winning is a ROUTE: take the receiver
+// now because two of these three backs will still be here at 26 and none of
+// these receivers will.
+//
+// planRoute() drafts the REST of my draft for me. At every remaining pick it
+// takes whoever these same rules would take, from the players expected to still
+// be on the board by then, and hands back the team that results. Candidates are
+// then judged on that team rather than on themselves.
+//
+// The measure of a team is not the sum of its players. It is what it puts on
+// the field WEEK BY WEEK: on a bye week the starter is replaced by whoever is
+// left, and a roster whose byes collide loses real points that a season total
+// never shows. seasonPoints() adds up all seventeen weeks, so complementary
+// byes and useful depth are worth exactly what they are worth, and nothing is
+// double-counted by a hand-tuned bonus.
+// ============================================================================
+const WEEKS = 17;
+
+// Virtual-roster versions of the roster rules. Deliberately separate from the
+// live ones, which read globals: a refactor of the shipped scorer is not
+// something to attempt on the afternoon of a draft.
+function vCount(r, pos) { let n = 0; for (const p of r) if (p.p === pos) n++; return n; }
+function vShort(r) {
+  const s = {}; let total = 0;
+  for (const pos in REQ) { const d = Math.max(0, REQ[pos] - vCount(r, pos)); s[pos] = d; total += d; }
+  const surplus = FLEXOK.reduce((a, pos) => a + Math.max(0, vCount(r, pos) - REQ[pos]), 0);
+  s.FLEX = surplus > 0 ? 0 : 1; total += s.FLEX;
+  return { s: s, total: total };
+}
+function vNeed(r, pos, rnd, left) {
+  if (vCount(r, pos) >= MAX[pos]) return null;
+  const sh = vShort(r), fillsSlot = sh.s[pos] > 0;
+  const fillsFlex = sh.s.FLEX > 0 && FLEXOK.indexOf(pos) >= 0 && !fillsSlot &&
+                    !(pos === "TE" && vCount(r, pos) >= 1);
+  if (left <= sh.total) return (fillsSlot || fillsFlex) ? 900 : null;
+  if (pos === "K") return rnd >= CFG.kRound ? 800 : null;
+  if (pos === "DST") return rnd >= CFG.dstRound ? 800 : null;
+  if (pos === "QB" && vCount(r, "QB") >= 1) return left <= 2 ? -30 : null;
+  if (fillsSlot || fillsFlex) return 40;
+  if (pos === "WR" && vCount(r, pos) < 4) return CFG.benchWR;
+  if (pos === "RB" && vCount(r, pos) < 4) return CFG.benchRB;
+  if (pos === "RB" && vCount(r, pos) >= 4 && vCount(r, "WR") < 5) return -CFG.rb5pen;
+  return 0;
+}
+
+// The starting lineup for one week, given who is not on a bye.
+function vLineup(r, week) {
+  const board = SLOTS.filter(x => x[1]);           // starting slots only
+  const pool = r.filter(p => p.b !== week).sort((a, b) => b.e - a.e);
+  const used = {}; const out = [];
+  for (const sl of board) {
+    const ok = sl[1];
+    if (ok.length !== 1) continue;                 // flex resolved after
+    const hit = pool.find(p => !used[p.n] && ok.indexOf(p.p) >= 0);
+    if (hit) { used[hit.n] = 1; out.push(hit); }
+  }
+  for (const sl of board) {
+    const ok = sl[1];
+    if (ok.length === 1) continue;
+    const hit = pool.filter(p => !used[p.n] && ok.indexOf(p.p) >= 0)
+                    .sort((a, b) => (b.e + (b.p === "TE" ? CFG.flexTE : 0)) -
+                                    (a.e + (a.p === "TE" ? CFG.flexTE : 0)))[0];
+    if (hit) { used[hit.n] = 1; out.push(hit); }
+  }
+  return out;
+}
+// What this roster actually scores, week by week, over the season. An empty
+// starting slot scores nothing -- which is exactly the cost of a bye you did
+// not cover, and the reason two studs sharing a bye are worth less than the
+// same two points spread across different weeks.
+function seasonPoints(r) {
+  let tot = 0;
+  for (let w = 1; w <= WEEKS; w++) for (const p of vLineup(r, w)) tot += p.e / WEEKS;
+  return tot;
+}
+
+// Everyone still expected to be on the board at pick N. Only the top few of
+// each position are returned: the rollout evaluates a whole season for every
+// candidate it considers, and the fortieth-best receiver is not going to be
+// the answer. This is the difference between a plan that arrives inside the
+// pick clock and one that does not.
+const ROLL_WIDTH = 10;
+function expectedAvail(N, pc, taken) {
+  const byPos = {};
+  for (const q of PLAYERS) {
+    if (q.v <= -90 || gone.has(q.n) || mine.indexOf(q.n) >= 0 || taken[q.n]) continue;
+    if (survives(q, N, pc) < CFG.survThresh) continue;
+    (byPos[q.p] = byPos[q.p] || []).push(q);
+  }
+  const out = [];
+  for (const pos in byPos) {
+    byPos[pos].sort((a, b) => b.e - a.e);
+    for (let i = 0; i < Math.min(ROLL_WIDTH, byPos[pos].length); i++) out.push(byPos[pos][i]);
+  }
+  return out;
+}
+
+// Draft the rest of my picks, assuming the board behaves as expected.
+function planRoute(first, pick, pc) {
+  const taken = {};
+  const roster = mine.map(n => byName[n]).filter(Boolean);
+  const route = [];
+  if (first) { taken[first.n] = 1; roster.push(first); route.push({ pick: pick, p: first }); }
+  const rest = myPicks().filter(x => x > pick);
+  for (let i = 0; i < rest.length; i++) {
+    const N = rest[i], after = rest[i + 1] || null;
+    if (roster.length >= ROUNDS) break;
+    const rnd = Math.min(ROUNDS, Math.ceil(N / TEAMS));
+    const left = ROUNDS - roster.length;
+    const avail = expectedAvail(N, pc, taken);
+    const base = seasonPoints(roster);
+
+    // What taking a man NOW buys over waiting one turn at his position. Greedy
+    // on lineup points alone drafted Bo Nix at pick 15 -- a quarterback scores
+    // the most raw points, so he always looked like the biggest addition. But
+    // every team ends up with a quarterback, and Nix goes at 113. What matters
+    // is the gap between him and the best of his position still there NEXT
+    // time, which is replacement value measured in actual lineup points rather
+    // than assumed from a table.
+    const gainOf = q => { roster.push(q); const g = seasonPoints(roster); roster.pop(); return g - base; };
+    const wait = {};
+    if (after) {
+      const later = expectedAvail(after, pc, taken);
+      for (const pos in MAX) {
+        let bestLater = null;
+        for (const q of later) if (q.p === pos && (!bestLater || q.e > bestLater.e)) bestLater = q;
+        wait[pos] = bestLater ? gainOf(bestLater) : 0;
+      }
+    }
+
+    let best = null, bs = -1e9;
+    for (const q of avail) {
+      const nb = vNeed(roster, q.p, rnd, left);
+      if (nb === null) continue;
+      // seasonPoints already prices the bye clash, the depth and the flex, so
+      // nothing here needs a hand-tuned bonus and nothing can double-count.
+      const sc = gainOf(q) - (wait[q.p] || 0) + (nb >= 800 ? nb : 0);
+      // Ties are common and must not fall to whoever happens to sit earlier in
+      // the array: when the best of a position is expected to survive anyway,
+      // every candidate there scores about zero, and array order was quietly
+      // choosing between them.
+      if (sc > bs + 1e-9 || (best && Math.abs(sc - bs) <= 1e-9 && q.e > best.e)) { bs = sc; best = q; }
+    }
+    if (!best) break;
+    taken[best.n] = 1; roster.push(best); route.push({ pick: N, p: best });
+  }
+  return { route: route, roster: roster, pts: seasonPoints(roster) };
+}
+
 function recommend(){
   const pick=curPick(), rnd=Math.min(ROUNDS,Math.ceil(pick/TEAMS));
   PACE=pace();
   const live=PLAYERS.filter(p=>!gone.has(p.n)&&!mine.includes(p.n)&&p.v>-90);
-  let out=live.map(p=>score(p,pick,rnd)).filter(Boolean).sort((a,b)=>b.s-a.s).slice(0,5);
-  if(out.length) return out;
+  let out=live.map(p=>score(p,pick,rnd)).filter(Boolean).sort((a,b)=>b.s-a.s).slice(0,8);
+  if(out.length){
+    if(!PLAN) return out.slice(0,5);
+    // render() runs on every board change, and several times per change. The
+    // rollout is the expensive part of the tool by two orders of magnitude, so
+    // it is computed once per actual board state and then reused.
+    const sig=pick+"|"+gone.size+"|"+mine.length+"|"+slot+"|"+out.map(c=>c.p.n).join(",");
+    if(planCache.sig===sig) return planCache.out;
+    // Re-rank the shortlist on the team each pick leads to. The per-pick score
+    // chose the shortlist -- it knows about runs, reaches and handcuffs, which
+    // a rollout cannot see -- and the route then decides the order, because the
+    // season is won by the roster you finish with, not the pick you enjoy most.
+    for(const c of out){
+      const pl=planRoute(c.p,pick,PACE);
+      c.route=pl.route.slice(1); c.pts=pl.pts;
+    }
+    const bestPts=Math.max(...out.map(c=>c.pts));
+    for(const c of out){
+      c.lost=bestPts-c.pts;
+      if(c.lost>0.5) c.why.push("costs <b>"+c.lost.toFixed(0)+" pts</b> of finished team vs the best route");
+      else c.why.unshift("<b>best finished team</b> — "+Math.round(c.pts)+" starting pts");
+    }
+    out.sort((a,b)=>b.pts-a.pts||b.s-a.s);
+    planCache={sig:sig,out:out.slice(0,5)};
+    return planCache.out;
+  }
   // FALLBACK 1: a required position exists but the pool is empty there.
   const {s:sf}=shortfall();
   const missing=Object.keys(sf).filter(k=>k!=="FLEX"&&sf[k]>0);
@@ -612,6 +796,7 @@ function likelyNext(k){
 let feed=[];                 // newest last: {n, pick, src, conf, mine}
 let boardPick=null;          // pick number Yahoo says we are on, if readable
 let onReset=null;            // the bridge registers its own clean-up here
+let planCache={sig:null,out:null};   // the route rollout, per board state
 let bridgeSeen=0;            // timestamp of the last successful board read
 
 function ingestPick(name,opt){
@@ -655,6 +840,20 @@ function render(){
     $("slots").appendChild(b);
   }
   const pick=curPick(), nm=nextMine();
+  // Every pick you own, struck through as they go by, with the wait to the one
+  // after next -- the number that actually decides whether reaching is sane.
+  const mp=$("myPicks");
+  if(mp){
+    if(!slot){ mp.innerHTML=""; }
+    else{
+      const all=myPicks();
+      mp.innerHTML=all.map((n,i)=>{
+        const cls=n<pick?"mp done":(n===nm?"mp next":"mp");
+        const gap=(i<all.length-1)?'<span class="gap">'+(all[i+1]-n)+'</span>':"";
+        return '<span class="'+cls+'">'+n+'</span>'+gap;
+      }).join("");
+    }
+  }
   $("curPick").textContent=pick;
   $("nextPick").textContent=slot?(nm||"done"):"—";
   $("cnt").innerHTML=mine.length+'<span style="font-size:12px;color:var(--mute)">/15</span>';
@@ -1022,9 +1221,9 @@ $("undo").onclick=undo;
 let resetArmed=0;
 $("reset").onclick=()=>{
   const b=$("reset");
-  if(Date.now()-resetArmed>3000){
+  if(Date.now()-resetArmed>6000){
     resetArmed=Date.now(); b.textContent="SURE?";
-    setTimeout(()=>{ if(Date.now()-resetArmed>=3000){ b.textContent="RESET"; } },3100);
+    setTimeout(()=>{ if(Date.now()-resetArmed>=6000){ b.textContent="RESET"; } },6100);
     return;
   }
   resetArmed=0; b.textContent="RESET";

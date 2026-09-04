@@ -37,6 +37,16 @@ section{padding:14px}
 .turn{border-color:var(--hi);background:rgba(245,197,24,.11)}
 .turn .v{color:var(--hi)}
 .away{font-size:12px;color:var(--mute);font-family:var(--mono);margin-top:8px}
+/* Every pick number you own, for the whole draft. Knowing that your next two
+   are 26 and 35 -- and that after 46 you wait nineteen picks -- is half of
+   knowing whether to reach. */
+.mypicks{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.mypicks .mp{font-family:var(--mono);font-size:10.5px;padding:3px 6px;border-radius:4px;
+  border:1px solid var(--line);background:var(--card2);color:var(--mute);
+  font-variant-numeric:tabular-nums}
+.mypicks .mp.done{opacity:.38;text-decoration:line-through}
+.mypicks .mp.next{background:var(--hi);color:#0D1015;border-color:var(--hi);font-weight:700}
+.mypicks .gap{font-family:var(--mono);font-size:9px;color:#5F6C7D;align-self:center;padding:0 1px}
 
 .still{font-family:var(--mono);font-size:11px;color:var(--ink);background:var(--card2);
   border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin-bottom:10px;letter-spacing:.02em}
@@ -236,6 +246,7 @@ input#fast:focus{outline:none;border-color:var(--hi);background:#141A22}
 <section>
   <p class="lbl">Your draft slot</p>
   <div class="slots" id="slots"></div>
+  <div class="mypicks" id="myPicks"></div>
   <div class="status">
     <div class="stat" id="pickBox"><div class="k">On the clock</div><div class="v" id="curPick">1</div></div>
     <div class="stat" id="mineBox"><div class="k">Your next pick</div><div class="v" id="nextPick">—</div></div>
