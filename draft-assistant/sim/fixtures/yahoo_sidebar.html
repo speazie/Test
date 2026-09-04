@@ -1,0 +1,42 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Yahoo sidebar shape</title>
+<style>body{background:#1a1d29;color:#eee;font:13px system-ui;margin:0}
+.picks{width:320px;padding:10px}
+.pk{display:flex;gap:8px;padding:8px 4px;border-bottom:1px solid #2a2f3e}
+.num{color:#8a93a5;font-weight:700;width:20px}
+.who{flex:1}
+.nm{font-weight:600}
+.meta{color:#98a1b3;font-size:11px}
+.mgr{color:#c9d1e0;font-size:12px;margin-top:8px}
+</style></head><body>
+<!-- Modelled on a real Yahoo draft room sidebar (screenshot, Sep 2026).
+     The details that broke the reader, all reproduced faithfully:
+       * pick numbers are BARE INTEGERS ("2"), not "1.02"
+       * team codes are TITLE CASE ("Det", "Ind"), not "DET"
+       * player names are INITIAL + UPPERCASE SURNAME ("J. GIBBS")
+       * name and meta live in SEPARATE elements, so a naive row scan sees
+         "RB • Ind • Bye 13" on its own -- which is how "Ind" became a
+         player and got matched to the Indianapolis defence. -->
+<div class="picks" id="picklist">
+  <div class="mgr">christopher</div>
+  <div class="pk"><span class="num">2</span><span class="who"><div class="nm">J. GIBBS</div><div class="meta">RB • Det • Bye 6</div></span></div>
+  <div class="mgr">Team 3</div>
+  <div class="pk"><span class="num">3</span><span class="who"><div class="nm">J. TAYLOR</div><div class="meta">RB • Ind • Bye 13</div></span></div>
+  <div class="mgr">Landon</div>
+  <div class="pk"><span class="num">4</span><span class="who"><div class="nm">J. CHASE</div><div class="meta">WR • Cin • Bye 6</div></span></div>
+  <div class="mgr">Tommy</div>
+  <div class="pk"><span class="num">5</span><span class="who"><div class="nm">P. NACUA</div><div class="meta">WR • LAR • Bye 11</div></span></div>
+  <div class="mgr">Marcus</div>
+  <div class="pk"><span class="num">6</span><span class="who"><div class="nm">A. ST. BROWN</div><div class="meta">WR • Det • Bye 6</div></span></div>
+  <div class="mgr">arshdeep</div>
+  <div class="pk"><span class="num">7</span><span class="who"><div class="nm">C. MCCAFFREY</div><div class="meta">RB • SF • Bye 8</div></span></div>
+</div>
+<script>
+window.addYahooPick = function (num, name, meta) {
+  const box = document.getElementById('picklist');
+  const d = document.createElement('div'); d.className = 'pk';
+  d.innerHTML = '<span class="num">' + num + '</span><span class="who">' +
+    '<div class="nm">' + name + '</div><div class="meta">' + meta + '</div></span>';
+  box.appendChild(d);
+};
+</script>
+</body></html>

@@ -194,8 +194,35 @@ your user-agent, which is what I need to fix it.
 | Panel appears, but BIND finds nothing | You clicked a heading or empty space. Click directly on a row that has a player's name in it. |
 | It bound the wrong list (marks everyone gone) | **PAUSE**, then **REBIND REGION** onto the pick log. Undo the bad rows in the feed, or **RESET** and re-import. |
 | Picks stop arriving | Red dot appears after 25s. Hit **RESCAN**. If still dead, just use tap entry — you lose nothing but the automation. |
+| Says LIVE but nothing lands | Hit **DIAGNOSE**. It prints the rows the reader is actually seeing and what it made of each one — see below. |
 | Panel covers the draft board | Click the yellow SSTLV tab to collapse it. |
 | Someone is watching your screen | **HIDE** blanks the reasoning. |
+
+### DIAGNOSE — when it claims to be working and isn't
+
+The worst failure is a bridge that says **LIVE** and quietly commits nothing:
+there is no error to read. **DIAGNOSE** answers it. It prints, on the panel,
+what element it bound, how many rows it can see, and for the first eight rows
+the raw text and its verdict:
+
+```
+bound <div.picks> — 13 rows, 6 recognised
+2 J. GIBBS RB • Det • Bye 6
+  → Jahmyr Gibbs 100%  pick 2
+RB • Ind • Bye 13
+  → no name left after stripping
+```
+
+Read it like this:
+
+| What it says | What it means |
+|---|---|
+| `0 rows` or a tiny row count | Bound the wrong element. **REBIND REGION** onto a row that has a player's name in it. |
+| Rows are there, all "no name left after stripping" | It is looking at headings or manager names, not picks. Rebind one level in. |
+| Names match but every row says **NO PICK NUMBER** | Reads still commit; only turn detection suffers. Set your slot and watch the desync banner. |
+| Row counts in the hundreds | It bound the *available* list. Rebind — and undo anything it committed. |
+
+It reads only. Pressing it never commits a pick. Press it again to close.
 
 If everything fails, the standalone HTML in your other tab is a complete,
 working draft assistant. Tap the player in *Going next*, or type three letters.
@@ -237,10 +264,16 @@ trusting something I could not test.
 - Your own pick (1.06 from slot 6) lands on your roster, not the board.
 
 **Not verified — this is the honest gap:**
-- **Yahoo's actual draft-room HTML.** Never seen it. The reader was built not to
-  care: it matches on our own 237 names and uses pick numbers to find the log.
-  That should hold across layouts, but "should" is doing real work in that
-  sentence. **The mock-draft dry run is what closes this gap.** Do it.
+- **Yahoo's actual draft-room HTML.** Still never opened a live room, but the
+  gap is narrower than it was. A screenshot of the real draft-room sidebar
+  showed four things the reader had guessed wrong — pick numbers are bare
+  integers (`2`), not `1.02`; team codes are title case (`Det`), not `DET`;
+  names are initial + surname (`J. GIBBS`); and the position/team/bye line sits
+  in its own element, so it scans as a row of its own. All four are fixed and
+  the sidebar shape is now a permanent test (`sim/fixtures/yahoo_sidebar.html`).
+  What is *still* unverified is whether the whole page behaves the same way live
+  — virtualised scrolling, a redesign mid-draft. **The mock-draft dry run is
+  what closes that.** Do it, and if it misbehaves press DIAGNOSE.
 - **Yahoo's official API is not used.** It now requires manual approval from
   Yahoo before an app can read fantasy data, which is not a plan for a draft
   that is imminent. If you already hold approved API credentials, say so — an

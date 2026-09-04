@@ -1130,8 +1130,17 @@ function elFromPath(path) {
 // bogus pick number moves the whole counter.
 const RE_PICK_DOT = /^\(?(\d{1,2})\.(\d{1,2})\)?(?!\d)/;  // "3.07 Bijan Robinson"
 const RE_PICK_WORD = /\bpick\s*#?\s*(\d{1,3})\b/i;        // Pick 27
-const RE_POS = /\b(QB|RB|WR|TE|K|DEF|DST|D\/ST)\b/;
-const RE_TEAM = /\b(ARI|ATL|BAL|BUF|CAR|CHI|CIN|CLE|DAL|DEN|DET|GB|HOU|IND|JAX|KC|LAC|LAR|LV|MIA|MIN|NE|NO|NYG|NYJ|PHI|PIT|SEA|SF|TB|TEN|WAS)\b/;
+// Yahoo's own sidebar numbers picks with a BARE INTEGER at the start of the
+// row -- "2  J. GIBBS" -- not round.pick. Without this the reader finds no
+// pick numbers at all, which is what makes container resolution fall back to
+// its weakest heuristic and bind the wrong element.
+const RE_PICK_NUM = /^\s*(\d{1,3})(?![\d.:])/;
+// CASE-INSENSITIVE. Yahoo renders these title-case -- "RB • Det • Bye 6" --
+// so an uppercase-only pattern stripped the position but left the team behind
+// as a residual "name". "Ind" then matched the Indianapolis defence.
+const RE_POS = /\b(QB|RB|WR|TE|K|DEF|DST|D\/ST)\b/i;
+const RE_TEAM = /\b(ARI|ATL|BAL|BUF|CAR|CHI|CIN|CLE|DAL|DEN|DET|GB|HOU|IND|JAX|KC|LAC|LAR|LV|MIA|MIN|NE|NO|NYG|NYJ|PHI|PIT|SEA|SF|TB|TEN|WAS)\b/i;
+const RE_TEAM_G = new RegExp(RE_TEAM.source, "gi");
 
 // textContent glues adjacent elements together: "<span>1.01</span>Bijan" reads
 // as "1.01Bijan", which matches neither a pick number nor a name. Walking the
@@ -1164,6 +1173,16 @@ function rowsOf(container) {
   return out;
 }
 
+// What is left after stripping pick number, position, team and bye must still
+// look like a person's name: at least one token of 3+ letters that is not
+// itself a team code. This is what rejects "Ind", "• SF •" and bare numbers.
+const MIN_READ = 0.5;
+function plausibleName(name) {
+  if (!name || name.length < 3) return false;
+  const toks = name.split(/[^A-Za-z']+/).filter(Boolean);
+  return toks.some(t => t.length >= 3 && !RE_TEAM.test(t));
+}
+
 function parseRow(text) {
   let pick = null;
   const d = text.match(RE_PICK_DOT);
@@ -1173,6 +1192,10 @@ function parseRow(text) {
   } else {
     const w = text.match(RE_PICK_WORD);
     if (w && +w[1] >= 1 && +w[1] <= 150) pick = +w[1];
+    else {
+      const n = text.match(RE_PICK_NUM);
+      if (n && +n[1] >= 1 && +n[1] <= 150) pick = +n[1];
+    }
   }
   const pm = text.match(RE_POS);
   let pos = pm ? pm[1] : null;
@@ -1180,9 +1203,9 @@ function parseRow(text) {
   const tm = text.match(RE_TEAM);
   // Strip the tokens the matcher should not see as part of the name.
   const name = text
-    .replace(RE_PICK_DOT, " ").replace(RE_PICK_WORD, " ")
-    .replace(RE_POS, " ").replace(RE_TEAM, " ")
-    .replace(/\b(bye|adp|rank|pts|proj)\b.*$/i, " ")
+    .replace(RE_PICK_DOT, " ").replace(RE_PICK_WORD, " ").replace(RE_PICK_NUM, " ")
+    .replace(RE_POS, " ").replace(RE_TEAM_G, " ")
+    .replace(/\b(bye|adp|rank|pts|proj|round)\b.*$/i, " ")
     .replace(/\s+/g, " ").trim();
   return { pick, pos, team: tm ? tm[1] : null, name };
 }
@@ -1193,9 +1216,15 @@ function readRegion(el) {
   const dedupe = new Set();
   for (const row of rowsOf(el)) {
     const info = parseRow(row.text);
-    if (!info.name || info.name.length < 2) continue;
+    if (!plausibleName(info.name)) continue;
     const m = matchBoardName(info.name, { pos: info.pos, team: info.team });
     if (!m.p || dedupe.has(m.p.n)) continue;
+    // A defence must be announced as one. Without this, a leftover team code
+    // or city in a meta line ("• Ind •") matches that team's DST.
+    if (m.p.p === "DST" && !/\b(DEF|DST|D\/ST)\b/i.test(row.text)) continue;
+    // Below this the read is noise -- manager names, UI labels, ad copy. It is
+    // not worth a confirmation tap, so it is not queued at all.
+    if (m.conf < MIN_READ) continue;
     dedupe.add(m.p.n);
     out.push({ player: m.p, conf: m.conf, pick: info.pick, alts: m.alts || [],
                raw: row.text, stale: m.stale || null });
@@ -1436,6 +1465,51 @@ function armOnly() {
 }
 
 // ---- the bridge's own panel, inside the shadow root ----
+// ---- what am I actually reading? ----
+// The failure that costs a draft is a bridge that says LIVE and commits
+// nothing: there is no error to read, and no way to tell whether the region is
+// wrong, the rows are wrong, or the names are wrong. This prints the reader's
+// own view of the bound region -- the raw row text, what survived stripping,
+// and what it matched -- on the panel, because nobody opens a console at pick
+// three. It reads only; it commits nothing.
+function brEsc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+let brDiag = null;
+function diagnose() {
+  if (brDiag) { brDiag = null; renderBridgePanel(); return; }
+  if (!BR.el) {
+    BR.note = "Nothing is bound yet — tap BIND THE PICK LIST first.";
+    renderBridgePanel();
+    return;
+  }
+  const rows = rowsOf(BR.el);
+  const lines = [];
+  for (const row of rows) {
+    if (lines.length >= 8) break;
+    const info = parseRow(row.text);
+    let verdict;
+    if (!plausibleName(info.name)) {
+      verdict = "no name left after stripping";
+    } else {
+      const m = matchBoardName(info.name, { pos: info.pos, team: info.team });
+      const pc = m.p ? Math.round(m.conf * 100) + "%" : "";
+      verdict = !m.p ? "no match for \u201C" + info.name + "\u201D"
+        : m.conf < MIN_READ ? "too weak — " + m.p.n + " " + pc
+        : m.p.n + " " + pc + (info.pick ? "  pick " + info.pick : "  NO PICK NUMBER");
+    }
+    lines.push({ raw: row.text.slice(0, 70), verdict: verdict });
+  }
+  const cls = String(BR.el.className || "").split(/\s+/)[0];
+  brDiag = {
+    tag: BR.el.tagName.toLowerCase() + (cls ? "." + cls : ""),
+    rows: rows.length,
+    reads: readRegion(BR.el).length,
+    lines: lines,
+  };
+  renderBridgePanel();
+}
+
 function renderBridgePanel() {
   const box = UIROOT.getElementById("brPanel");
   if (!box) return;
@@ -1449,7 +1523,18 @@ function renderBridgePanel() {
   if (BR.armed && !BR.paused) h += '<button id="brPause">PAUSE</button>';
   if (BR.paused) h += '<button id="brResume">RESUME</button>';
   h += '<button id="brRescan">RESCAN</button>';
+  h += '<button id="brWhy">' + (brDiag ? "HIDE DIAG" : "DIAGNOSE") + '</button>';
   h += '</div>';
+  if (brDiag) {
+    h += '<div class="brhd" style="margin-top:8px">WHAT THE READER SEES</div>';
+    h += '<div class="brpr">bound &lt;' + brEsc(brDiag.tag) + '&gt; — ' + brDiag.rows +
+         ' rows, ' + brDiag.reads + ' recognised</div>';
+    brDiag.lines.forEach(l => {
+      h += '<div class="brp" style="padding-top:6px;margin-top:6px">' +
+        '<div class="brpr" style="margin-bottom:2px">' + brEsc(l.raw) + '</div>' +
+        '<div class="brpn" style="font-size:11px">&rarr; ' + brEsc(l.verdict) + '</div></div>';
+    });
+  }
   if (BR.pending.length) {
     h += '<div class="brhd" style="margin-top:8px">NEEDS ONE TAP — not sure enough to commit</div>';
     BR.pending.forEach((f, i) => {
@@ -1470,6 +1555,7 @@ function renderBridgePanel() {
   if (B("brPause")) B("brPause").onclick = () => { BR.paused = true; renderBridgePanel(); };
   if (B("brResume")) B("brResume").onclick = () => { BR.paused = false; BR.note = ""; renderBridgePanel(); };
   if (B("brRescan")) B("brRescan").onclick = () => { BR.lastCount = 0; bridgeTick(); };
+  if (B("brWhy")) B("brWhy").onclick = diagnose;
   box.querySelectorAll("[data-ok]").forEach(b => b.onclick = () => confirmPending(+b.getAttribute("data-ok"), false));
   box.querySelectorAll("[data-mine]").forEach(b => b.onclick = () => confirmPending(+b.getAttribute("data-mine"), true));
   box.querySelectorAll("[data-no]").forEach(b => b.onclick = () => rejectPending(+b.getAttribute("data-no")));
@@ -1490,7 +1576,7 @@ if (BR.armed) bridgeTick();
 // against this; and on draft night it is the fastest way to see what the reader
 // is actually reading when something looks wrong. Console-only, no UI.
 window.__sstlv = {
-  BR, scanRegion, bridgeTick, matchBoardName, searchPlayers, ingestPick,
+  BR, scanRegion, bridgeTick, matchBoardName, searchPlayers, ingestPick, diagnose,
   curPick, desync, likelyNext,
   state: () => ({
     bound: !!BR.el, armed: BR.armed, paused: BR.paused,

@@ -13,6 +13,7 @@ H.readFreshHtml();            // refuse to test a stale build
 
 const TOOL = 'file://' + path.join(H.ROOT, 'tool/live-draft-assistant.html');
 const ROOM = 'file://' + path.join(H.ROOT, 'sim/fixtures/mock_draft_room.html');
+const SIDEBAR = 'file://' + path.join(H.ROOT, 'sim/fixtures/yahoo_sidebar.html');
 const PRACTICE = 'file://' + path.join(H.ROOT, 'tool/practice.html');
 const USERSCRIPT = path.join(H.ROOT, 'tool/yahoo-draft-bridge.user.js');
 
@@ -180,6 +181,74 @@ function ok(label, cond, detail) {
     ok('a burst of names pauses instead of committing', st.paused === true, 'paused=' + st.paused);
     ok('nothing was committed during the burst', st.gone === 0, 'gone=' + st.gone);
     ok('it says why', /available list/i.test(st.note || ''), 'note=' + st.note);
+
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nyahoo bridge — the real sidebar shape');
+  // ======================================================================
+  // Regression for draft-night failure: the panel said "bound" but committed
+  // nothing, and offered "Indianapolis DST 75%" from the text "RB - Ind - Bye
+  // 13". The fixture reproduces Yahoo's actual sidebar: bare integer pick
+  // numbers, title-case team codes, INITIAL + SURNAME names, and meta lines in
+  // their own elements next to manager names.
+  {
+    const page = await browser.newPage();
+    await page.goto(SIDEBAR);
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+
+    await page.click('#sstlv-host >> #slots button:nth-child(6)');
+    await page.click('#sstlv-host >> #brBind');
+    await page.click('#picklist');
+    ok('binds a sidebar whose pick numbers are bare integers',
+      (await page.evaluate(() => window.__sstlv.state())).bound === true);
+
+    await page.click('#sstlv-host >> #brImport');
+    let st = await page.evaluate(() => window.__sstlv.state());
+    // BR.seen is everything the reader consumed, my own pick included;
+    // st.mine is the roster, so the two overlap -- do not concatenate.
+    const all = st.seen;
+
+    ok('reads exactly the 6 real picks, no more', all.length === 6,
+      'got ' + all.length + ': ' + all.join(', '));
+    ['Jahmyr Gibbs', 'Jonathan Taylor', "Ja'Marr Chase", 'Puka Nacua',
+     'Amon-Ra St. Brown', 'Christian McCaffrey'].forEach(n => {
+      ok('"' + n.split(' ').pop() + '" reads from INITIAL + SURNAME', all.includes(n),
+        'all=' + all.join(', '));
+    });
+    // The two failures from the screenshot, named explicitly so a regression
+    // reads as itself and not as a count being off by one.
+    ok('a team code in a meta line is not a defence',
+      !all.some(n => /DST|D\/ST|Defen/i.test(n)) &&
+      !(st.pending || []).some(p => /DST/i.test(p)),
+      'all=' + all.join(', ') + ' pending=' + JSON.stringify(st.pending || []));
+    ok('a manager name is not a player', !all.includes('Courtland Sutton'));
+
+    // Pick 6 of 10 is my pick.
+    ok('my own pick lands on my roster', st.mine.includes('Amon-Ra St. Brown'),
+      'mine=' + st.mine.join(', '));
+
+    // DIAGNOSE is the draft-night escape hatch: it must print the reader's own
+    // view of the region, on the panel, without committing anything.
+    const beforeDiag = st.seen.length;
+    await page.click('#sstlv-host >> #brWhy');
+    const diagTxt = await page.textContent('#sstlv-host >> #brPanel');
+    ok('DIAGNOSE shows the raw rows it is reading',
+      /WHAT THE READER SEES/.test(diagTxt) && /GIBBS/.test(diagTxt),
+      diagTxt.slice(0, 200));
+    ok('DIAGNOSE commits nothing',
+      (await page.evaluate(() => window.__sstlv.state())).seen.length === beforeDiag);
+    await page.click('#sstlv-host >> #brWhy');   // and it closes again
+
+    // And a new pick arriving in that shape commits by itself.
+    await page.evaluate(() => window.addYahooPick(8, 'B. ROBINSON', 'RB • Atl • Bye 5'));
+    await page.waitForFunction(() => window.__sstlv.state().seen.length >= 7,
+      null, { timeout: 6000 }).catch(() => {});
+    st = await page.evaluate(() => window.__sstlv.state());
+    ok('a new pick in the real shape auto-commits', st.seen.includes('Bijan Robinson'),
+      'seen=' + st.seen.join(', '));
 
     await page.close();
   }
