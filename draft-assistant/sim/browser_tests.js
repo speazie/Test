@@ -620,6 +620,44 @@ function ok(label, cond, detail) {
   }
 
   // ======================================================================
+  console.log('\nevery one of my picks, not just the first');
+  // ======================================================================
+  // Reported mid-draft: "when I draft a player, the tool thinks I selected the
+  // player who gets picked after mine". Rows were de-duplicated by text so a
+  // wrapper and its child were not counted twice -- but manager labels REPEAT,
+  // once per pick, and "You" repeats fifteen times. Every label after the first
+  // was dropped, so your later picks inherited the label of the pick before
+  // them, which belongs to somebody else.
+  {
+    const page = await browser.newPage();
+    const mk = (mgr, n, nm, meta) =>
+      "<div class='grp'><div class='mgr'>" + mgr + "</div><div class='row'><span>" + n +
+      "</span><span>" + nm + "</span><span>" + meta + "</span></div></div>";
+    await page.setContent('<div id="log">' +
+      mk('You',  '4',  'B. ROBINSON', 'RB • Atl • Bye 5') +
+      mk('Migs', '5',  'P. NACUA',    'WR • LAR • Bye 11') +
+      mk('Carl', '6',  'J. CHASE',    'WR • Cin • Bye 6') +
+      mk('You',  '17', 'G. PICKENS',  'WR • Dal • Bye 14') +
+      mk('Jd',   '18', 'T. HIGGINS',  'WR • Cin • Bye 6') +
+      mk('You',  '24', 'B. HALL',     'RB • NYJ • Bye 13') + '</div>');
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    const r = await page.evaluate(() =>
+      window.__sstlv.readRegion(document.getElementById('log'))
+        .map(x => ({ n: x.player.n, pick: x.pick, y: !!x.yours })));
+
+    ok('all six picks read, in board order',
+      r.map(x => x.pick).join(',') === '4,5,6,17,18,24', JSON.stringify(r.map(x => x.pick)));
+    ok('every pick labelled "You" is mine, not just the first',
+      r.filter(x => x.y).map(x => x.n).join(', ') ===
+      "Bijan Robinson, George Pickens, Breece Hall",
+      r.filter(x => x.y).map(x => x.n).join(', '));
+    ok('and the pick straight after mine is never mine',
+      !r.find(x => x.n === "Puka Nacua").y && !r.find(x => x.n === 'Tee Higgins').y);
+    await page.close();
+  }
+
+  // ======================================================================
   console.log('\nmobile — a phone must not get a 28-pixel slit');
   // ======================================================================
   {

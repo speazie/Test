@@ -1,6 +1,6 @@
-import json, os, numpy as np
+import json, os, sys, numpy as np
 HERE=os.path.dirname(os.path.abspath(__file__))
-D=json.load(open(os.path.join(HERE,'drafts.json')))
+D=json.load(open(sys.argv[1] if len(sys.argv)>1 else os.path.join(HERE,'drafts.json')))
 # Measured weekly coefficients of variation, 2022-24 (README section 4). These
 # used to be read from a file outside the bundle, so this script could not run
 # at all from a clean checkout.
@@ -60,5 +60,5 @@ print("ROBUSTNESS: how much of the edge survives if my projections are wrong?")
 print("  (baseline for a random team: 40.0% playoffs, 10.0% title)")
 run(0.0,"projections perfect (the naive test)")
 run(0.5,"half my backtested error")
-run(1.0,"FULL backtested model error")
+for _s in (11,23,37,51,67): run(1.0,"FULL error seed %d"%_s, seed=_s)
 run(1.5,"1.5x my error (I am worse than measured)")

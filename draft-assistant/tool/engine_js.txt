@@ -425,6 +425,21 @@ function planRoute(first, pick, pc) {
   return { route: route, roster: roster, pts: seasonPoints(roster) };
 }
 
+// The route, on the card. "Take him and this is the team you finish with" is
+// the whole point of planning ahead, and it was being computed and thrown away.
+// Only on the top card: five of these is noise, one is a plan.
+function shortName(p){
+  if(p.p==="DST") return p.n.split(" ")[0];
+  const t=p.n.replace(/\s+(Jr\.|Sr\.|III|II|IV|V)$/,"").split(" ");
+  return t.length>1?t[t.length-1]:t[0];
+}
+function routeLine(r){
+  if(!r.route||!r.route.length) return "";
+  const seg=r.route.slice(0,6).map(x=>'<b>'+x.pick+'</b> '+shortName(x.p)).join(" &rsaquo; ");
+  return '<div class="route"><span class="rk">then</span>'+seg+
+    (r.route.length>6?" &hellip;":"")+'</div>';
+}
+
 function recommend(){
   const pick=curPick(), rnd=Math.min(ROUNDS,Math.ceil(pick/TEAMS));
   PACE=pace();
@@ -484,6 +499,15 @@ function unTake(n){ mine=mine.filter(x=>x!==n); render(); }
 // people's, with an empty roster and "15 picks left" all draft. Ownership is
 // fully recoverable: every pick carries the number it arrived on, so the slot
 // decides it whenever it is set or changed.
+// Setting the slot is not just assigning a number: every pick already entered
+// has to be re-attributed. Two callers need that -- the buttons and the board,
+// which can now work the slot out for itself -- so it lives in one place.
+function applySlot(i){
+  slot=i;
+  const moved=reclassifyBySlot();
+  save(); render();
+  return moved;
+}
 function reclassifyBySlot(){
   const ms=new Set(myPicks());
   if(!ms.size) return 0;
@@ -837,9 +861,7 @@ function render(){
     const b=document.createElement("button");
     b.className="slot"; b.textContent=i; b.setAttribute("aria-pressed",i===slot);
     b.onclick=()=>{
-      slot=i;
-      const moved=reclassifyBySlot();
-      save(); render();
+      const moved=applySlot(i);
       if(moved&&typeof BR!=="undefined"&&BR){
         BR.note="Slot "+i+": moved "+moved+" pick"+(moved>1?"s":"")+
           " off the board and onto YOUR roster.";
@@ -903,7 +925,8 @@ function render(){
       '<span class="meta">'+r.p.t+' · bye '+r.p.b+'</span></div>'+
       '<div class="nums">EV <b>'+r.p.e+'</b> · VOR <b>'+Math.round(r.p.v)+'</b> · ADP <b>'+
       Math.round(r.p.a)+'</b>'+(r.p.av<1?' · <b>'+Math.round(r.p.av*100)+'%</b> avail':'')+'</div>'+
-      '<div class="why">'+(r.why.slice(0,3).join(" &middot; ")||"best value available")+'</div></div>';
+      '<div class="why">'+(r.why.slice(0,3).join(" &middot; ")||"best value available")+'</div>'+
+      (i===0?routeLine(r):"")+'</div>';
     const btn=document.createElement("button");
     btn.className="take"+(i===0?"":" ghost"); btn.textContent="I TOOK HIM";
     btn.onclick=()=>takeIt(r.p.n);

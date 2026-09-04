@@ -8,7 +8,11 @@
 :root{
   --bg:#0D1015; --card:#161B22; --card2:#11161D; --line:#262E39;
   --ink:#E9EEF3; --mute:#8794A5; --hi:#F5C518;
-  --rb:#4ADE80; --wr:#42B8F5; --te:#C08CF7; --qb:#FB8C42; --k:#94A3B8; --dst:#F472B6;
+  /* Position colours matched to the Yahoo draft room, so a glance at our panel
+     and a glance at their board agree. RB (amber) and WR (blue) are read
+     straight off the live draft-room screenshots; the other four are chosen to
+     sit in the same family and stay distinguishable, not verified. */
+  --rb:#F2A93B; --wr:#4FA8E8; --te:#57C97A; --qb:#E85D9C; --k:#9E86D8; --dst:#8FA3B5;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -71,6 +75,11 @@ section{padding:14px}
 .nums{font-family:var(--mono);font-size:10.5px;color:#9FB0C4;margin-top:3px;
   letter-spacing:.02em;font-variant-numeric:tabular-nums}
 .nums b{color:var(--ink);font-weight:700}
+/* The rest of the draft this pick leads to, from who is expected to survive. */
+.route{font-family:var(--mono);font-size:10px;color:#7E8B9C;margin-top:4px;
+  line-height:1.5;font-variant-numeric:tabular-nums}
+.route b{color:var(--hi);font-weight:700}
+.route .rk{font-size:8.5px;letter-spacing:.14em;color:#5F6C7D;margin-right:5px}
 .why b{color:#BFCAD8;font-weight:600}
 .take{appearance:none;border:1px solid var(--hi);background:var(--hi);color:#0D1015;
   font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;
@@ -214,7 +223,7 @@ input#fast:focus{outline:none;border-color:var(--hi);background:#141A22}
 .dchip.hot{border-color:var(--hi);color:var(--hi)}
 .dchip.hot b{color:var(--hi)}
 .dchip .pos{font-size:8px;min-width:22px;padding:1px 3px;margin-right:3px}
-.stealth .why,.stealth .rtot,.stealth .drop{visibility:hidden}
+.stealth .why,.stealth .rtot,.stealth .drop,.stealth .route{visibility:hidden}
 
 /* bridge panel: rendered only by the userscript build, hidden when empty */
 #brPanel:empty{display:none}

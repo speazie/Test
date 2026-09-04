@@ -32,6 +32,7 @@ const BR = {
   lastCount: 0,
   paused: false,
   note: "",
+  youSlots: [],   // slots implied by picks the board labelled "You"
 };
 const BR_KEY = "sstlv-bridge-v1";
 // Namespaced by draft for the same reason the board is: a region path and a
@@ -119,7 +120,12 @@ function rowsOf(container) {
   const push = el => {
     const t = rowText(el);
     if (!t || t.length > 160) return;          // a huge blob is a wrapper, not a row
-    if (seenText.has(t)) return;
+    // Identical text is dropped so a wrapper and its child are not counted
+    // twice -- but MANAGER LABELS repeat, once per pick they make, and "You"
+    // repeats fifteen times. Dropping them meant only your FIRST pick was ever
+    // recognised as yours, and every later one was attributed to whoever
+    // labelled the pick before it. Short rows are labels; let them through.
+    if (seenText.has(t) && t.length > 24) return;
     // You cannot draft from a list nobody can see. Yahoo keeps the QUEUE tab in
     // the DOM with display:none right beside the pick log, and reading it marks
     // four players you were HOPING to draft as already gone.
@@ -453,6 +459,38 @@ function scanRegion() {
   return all.filter(r => !BR.seen.has(r.player.n));
 }
 
+// ---- the draft slot, worked out from the board ----
+// Setting the slot by hand is one more thing to get wrong before a draft, and
+// getting it wrong is silent: the tool simply believes your picks are somebody
+// else's for fifteen rounds. But a pick labelled "You", with its number, says
+// exactly which seat you are in -- pick 82 of a ten-team snake is round 9,
+// second in the round, so slot 2. Two agreeing observations and we know.
+function slotFromPick(n) {
+  const r = Math.ceil(n / TEAMS), q = n - (r - 1) * TEAMS;
+  return (r % 2) ? q : (TEAMS - q + 1);
+}
+function learnSlot(reads) {
+  for (const f of reads) if (f.yours && f.pick) {
+    const sl = slotFromPick(f.pick);
+    if (sl >= 1 && sl <= TEAMS) BR.youSlots.push(sl);
+  }
+  if (!BR.youSlots.length) return;
+  const tally = {};
+  for (const sl of BR.youSlots) tally[sl] = (tally[sl] || 0) + 1;
+  let bestSlot = null, bestN = 0;
+  for (const sl in tally) if (tally[sl] > bestN) { bestN = tally[sl]; bestSlot = +sl; }
+  // One sighting is enough to fill an empty slot; overruling a slot you chose
+  // yourself takes two, so a single misread cannot move your seat.
+  const need = slot ? 2 : 1;
+  if (bestN >= need && bestSlot !== slot) {
+    const was = slot;
+    const moved = applySlot(bestSlot);
+    BR.note = "The board says you are slot " + bestSlot +
+      (was ? " (you had " + was + " set)" : "") + "." +
+      (moved ? " Moved " + moved + " pick" + (moved > 1 ? "s" : "") + " to the right side." : "");
+  }
+}
+
 // ---- committing ----
 function bridgeTick() {
   if (!BR.armed || BR.paused) return;
@@ -486,7 +524,12 @@ function bridgeTick() {
     return;
   }
 
+  learnSlot(fresh);
   const myPickSet = new Set(myPicks());
+  // Board order, not DOM order. When several picks land between two scans and
+  // the board gives no numbers, the order they are committed in IS their pick
+  // order -- so reading them backwards hands your pick to the man after you.
+  fresh.sort((a, b) => (a.pick == null ? 1e9 : a.pick) - (b.pick == null ? 1e9 : b.pick));
   for (const f of fresh) {
     BR.seen.add(f.player.n);
     // Never auto-commit a shaky read. It goes to the confirm strip, where it is
@@ -653,6 +696,7 @@ function findItForMe() {
 }
 function importPreload() {
   const list = BR.preload || [];
+  learnSlot(list);
   const myPickSet = new Set(myPicks());
   // Import in board order so the pick numbers line up.
   list.sort((a, b) => (a.pick || 999) - (b.pick || 999));
