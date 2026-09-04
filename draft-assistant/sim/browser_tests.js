@@ -235,6 +235,29 @@ function ok(label, cond, detail) {
     const mst = await page.evaluate(() => window.__sstlv.state());
     ok('imports by touch', mst.gone + mst.mine.length === 4, 'got ' + (mst.gone + mst.mine.length));
     ok('no page errors on mobile', errs.length === 0, errs.join(' | '));
+    // The panel is injected into a shadow root, where ":root" and "body" match
+    // nothing. If the stylesheet is not rescoped the panel renders transparent
+    // over the draft board and its footer spans the whole viewport.
+    const shadowCss = await page.evaluate(() => {
+      const host = document.getElementById('sstlv-host');
+      const sr = host.shadowRoot;
+      const foot = sr.querySelector('footer');
+      return {
+        hostBg: getComputedStyle(host).backgroundColor,
+        bgVar: getComputedStyle(sr.querySelector('.wrap')).getPropertyValue('--bg').trim(),
+        footW: foot ? Math.round(foot.getBoundingClientRect().width) : 0,
+        hostW: Math.round(host.getBoundingClientRect().width),
+      };
+    });
+    ok('panel background is opaque, not see-through',
+      /^rgb\(/.test(shadowCss.hostBg) && !/rgba\(0, 0, 0, 0\)/.test(shadowCss.hostBg),
+      'hostBg=' + shadowCss.hostBg);
+    ok('CSS variables survive the shadow boundary', shadowCss.bgVar.length > 0,
+      '--bg=' + (shadowCss.bgVar || '(undefined)'));
+    ok('footer stays inside the panel, not across the viewport',
+      shadowCss.footW > 0 && shadowCss.footW <= shadowCss.hostW + 2,
+      'footer ' + shadowCss.footW + 'px vs panel ' + shadowCss.hostW + 'px');
+
     ok('self-diagnostic banner clears on a healthy load',
       await page.evaluate(() => {
         const c = document.getElementById('jsCheck');

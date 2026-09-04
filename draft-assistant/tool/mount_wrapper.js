@@ -5,7 +5,35 @@
 // Responsibilities: create the host element, attach a shadow root, inject the
 // UI, expose UIROOT_OVERRIDE to the engine, and lay the panel out sensibly on
 // both a desktop and a phone.
+// Inside a shadow root, ":root" and "body" match NOTHING -- there is no <html>
+// and no <body> in there. The shell stylesheet defines every colour variable on
+// :root and the panel background on body, so injected verbatim the panel came
+// out with no variables and a transparent background, showing the Yahoo page
+// straight through it. And `footer{position:fixed}` is positioned against the
+// VIEWPORT, not the panel, so the button bar stretched across the whole screen.
+//
+// Rewrite those three selectors as the CSS crosses the shadow boundary. The
+// standalone HTML build is untouched: there :root and body are real.
+function scopeForShadow(css) {
+  let out = css
+    .replace(/(^|[}\s])\s*:root\s*\{/g, '$1:host{')
+    .replace(/(^|[}\s])\s*body\s*\{/g, '$1:host{');
+  out += `
+/* --- shadow-boundary corrections, appended by mountShim --- */
+:host{display:block;background:#0D1015;color:#E9EEF3;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px;line-height:1.4}
+/* the button bar belongs to the panel, not to the page */
+footer{position:sticky;left:auto;right:auto;bottom:0;width:100%}
+/* keep BIND / ARM reachable without hunting for it */
+#brPanel:not(:empty){position:sticky;top:0;z-index:5;
+  box-shadow:0 6px 14px rgba(13,16,21,.9)}
+`;
+  return out;
+}
+
 module.exports = function mountShim({ css, body, padBody }) {
+  css = scopeForShadow(css);
   return `
   // ---- self-diagnostic, before anything that can fail ----
   // If any of the code below throws, the page would otherwise look like a set
