@@ -139,3 +139,82 @@ the model's own documented policy, and they silently failed to apply.
   share identical EVs. Unchanged by this audit; see `FINDINGS.md` section 2.
 - Nothing here validates the underlying ridge model. It confirms the corrections
   on top of it are now applied consistently.
+
+
+---
+
+# Durability (added after the audit)
+
+The availability layer shipped as a hand-written **news** list — 18 players with
+a camp injury or an open disciplinary matter. It had no memory. A receiver who
+tore a knee in October and had not played since carried the same `av: 1.0` as
+one who has never missed a snap, and the model paid full price for both.
+
+`data/apply_durability.js` adds the history, from nflverse games and PPG,
+2020–2025 (committed as `data/games_played.json`, so it reproduces offline).
+
+## The rule
+
+> Discount a major injury **unless** the player has proven it did not reduce
+> his production.
+
+Operationally, in the order the questions get asked:
+
+1. **Did he ever lose a season?** ≤ 11 of 17 games. Missing a couple of games is
+   ordinary — week 18 rest, a one-week knock — and treating that as an injury
+   put Mahomes and C.J. Stroud on the risk list at 94%, which is noise wearing
+   the costume of a finding.
+2. **Was the absence physical?** A served suspension reads exactly like a torn
+   ACL in games-played data. `data/not_injury.json` excludes those by hand,
+   because the injury report cannot tell them apart: a suspended player and a
+   player on season-ending IR both simply stop appearing on it.
+3. **Has he played a full season since?** ≥ 12 games. If so, **no discount at
+   all** — we now have direct evidence of what he produces post-injury, and the
+   projection is built on it.
+4. Otherwise, discount on **points per game** (weight 0.7) and missed time
+   (0.3), floored at 0.70.
+
+## Why step 3 is a full season and not a PPG test
+
+An earlier cut tested post-injury PPG against a pre-injury baseline *forever*.
+It flagged **Mark Andrews** and **Cooper Kupp** — both of whom played a full 17
+games and simply are not what they were in 2021. That is **decline, already
+priced into their EV**, and nothing to do with being hurt. Charging them again
+would be double-counting the same fact.
+
+The discount now exists exactly where the evidence does not: a player hurt
+recently, whose projection still leans on how good he was before.
+
+## What it does and does not touch
+
+**Cleared by the "unless" clause** — each lost a season, then played a whole one:
+
+| | Injury season | Season back | Verdict |
+|---|---|---|---|
+| Breece Hall | 2022, 7 games (ACL) | 2023, 17 games at 17.1/g | no discount |
+| Jonathan Taylor | 2023, 10 games | 2024, 14 → 2025, 17 at 21.3/g | no discount |
+| Christian McCaffrey | 2024, 4 games | 2025, 17 games at 24.5/g | no discount |
+
+**Discounted** — 33 players; the ones that matter on this board:
+
+| | Availability | VOR | Evidence |
+|---|---|---|---|
+| Malik Nabers | 95% → **70%** | 14 → −32 | 4 games; PPG 18.2 → 14.3 |
+| Jayden Daniels | 100% → **73%** | −14 → −84 | 7 games; PPG 20.9 → 16.3 |
+| Joe Burrow | 100% → **79%** | −37 → −87 | 8 games; PPG 19.7 → 16.8 |
+| Rashee Rice | 100% → **82%** | 56 → 18 | rate *rose* (13.3→16.2→18.8); availability only |
+| Garrett Wilson | 100% → **89%** | 14 → −3 | 7 games, but PPG held (14.8 → 14.2) |
+| Bucky Irving | 100% → **89%** | 50 → 37 | 10 games; PPG held (14.4 → 13.8) |
+
+Note the shape of the last three: **PPG held, so only the missed-time term
+applies** — a mild discount, not a burial. That is the rule doing what it was
+asked to.
+
+## The honest caveat
+
+This is a **judgement change grounded in real data, not a measured
+improvement**. The season simulation scores every team with the same
+projections it drafts on, so any projection change trivially "improves" the
+simulated title rate. That number would only tell us the simulation agrees with
+itself. What *is* verified is the data (nflverse games and PPG), the rule's
+behaviour on named cases, and that nothing else broke.

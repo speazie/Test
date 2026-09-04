@@ -1,0 +1,14 @@
+{
+  "_comment": [
+    "Seasons where a player's missed games were NOT an injury, and so must not",
+    "feed the durability layer. The nflverse injury report cannot tell these",
+    "apart: a suspended player and a player on season-ending IR both simply",
+    "stop appearing on it, so 'weeks listed Out' undercounts a torn ACL just as",
+    "badly as it undercounts a suspension. This list is therefore hand-kept and",
+    "deliberately short. Add a season here only when you know the absence was",
+    "not physical.",
+    "",
+    "Format: \"Player Name\": [\"2025\", ...]"
+  ],
+  "Rashee Rice": ["2025"]
+}

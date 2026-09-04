@@ -56,6 +56,11 @@ section{padding:14px}
 .ritem .nm{font-weight:600}
 .ritem.top .nm{font-weight:800}
 .why{font-size:11.5px;color:var(--mute);margin-top:2px;line-height:1.45}
+/* The three decision numbers, in one place on every card. Brighter than the
+   prose because this is what you read when the clock is under ten seconds. */
+.nums{font-family:var(--mono);font-size:10.5px;color:#9FB0C4;margin-top:3px;
+  letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.nums b{color:var(--ink);font-weight:700}
 .why b{color:#BFCAD8;font-weight:600}
 .take{appearance:none;border:1px solid var(--hi);background:var(--hi);color:#0D1015;
   font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;
@@ -175,6 +180,7 @@ input#fast:focus{outline:none;border-color:var(--hi);background:#141A22}
 .lkb:active{background:var(--hi);color:#0D1015}
 .lkb .lm{display:block;font-family:var(--mono);font-size:8.5px;color:var(--mute);margin-top:2px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lkb .ln{color:#9FB0C4;margin-top:1px;font-variant-numeric:tabular-nums}
 .lkb .lr{font-family:var(--mono);font-size:9px;color:#5F6C7D;float:right;margin-left:6px}
 
 .feed{border:1px solid var(--line);border-radius:8px;background:var(--card2);overflow:hidden}
@@ -198,7 +204,7 @@ input#fast:focus{outline:none;border-color:var(--hi);background:#141A22}
 .dchip.hot{border-color:var(--hi);color:var(--hi)}
 .dchip.hot b{color:var(--hi)}
 .dchip .pos{font-size:8px;min-width:22px;padding:1px 3px;margin-right:3px}
-.stealth .why,.stealth .rtot,.stealth #recList .meta,.stealth .drop{visibility:hidden}
+.stealth .why,.stealth .rtot,.stealth .drop{visibility:hidden}
 
 /* bridge panel: rendered only by the userscript build, hidden when empty */
 #brPanel:empty{display:none}

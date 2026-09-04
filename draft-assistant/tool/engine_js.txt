@@ -686,9 +686,15 @@ function render(){
   recs.forEach((r,i)=>{
     const d=document.createElement("div");
     d.className="ritem"+(i===0?" top":"");
+    // EV, VOR and ADP on every card, every time. They used to be spread across
+    // the meta line and the prose ("66 pts over a replacement WR"), so the
+    // three numbers you actually decide on were never in one place, and the
+    // meta line was blanked by HIDE.
     d.innerHTML='<div class="no">'+(i+1)+'</div><div class="body">'+
       '<div class="nm">'+r.p.n+' <span class="pos '+r.p.p+'">'+r.p.p+'</span> '+
-      '<span class="meta">'+r.p.t+' · bye '+r.p.b+' · ADP '+Math.round(r.p.a)+'</span></div>'+
+      '<span class="meta">'+r.p.t+' · bye '+r.p.b+'</span></div>'+
+      '<div class="nums">EV <b>'+r.p.e+'</b> · VOR <b>'+Math.round(r.p.v)+'</b> · ADP <b>'+
+      Math.round(r.p.a)+'</b>'+(r.p.av<1?' · <b>'+Math.round(r.p.av*100)+'%</b> avail':'')+'</div>'+
       '<div class="why">'+(r.why.slice(0,3).join(" &middot; ")||"best value available")+'</div></div>';
     const btn=document.createElement("button");
     btn.className="take"+(i===0?"":" ghost"); btn.textContent="I TOOK HIM";
@@ -829,8 +835,8 @@ function renderLikely(){
     const b=document.createElement("button");
     b.className="lkb";
     b.innerHTML='<span class="lr">'+Math.round(boardRank(p))+'</span>'+p.n+
-      '<span class="lm"><span class="pos '+p.p+'">'+p.p+'</span> '+p.t+
-      ' · VOR '+Math.round(p.v)+'</span>';
+      '<span class="lm"><span class="pos '+p.p+'">'+p.p+'</span> '+p.t+'</span>'+
+      '<span class="lm ln">EV '+p.e+' · VOR '+Math.round(p.v)+' · ADP '+Math.round(p.a)+'</span>';
     b.title="mark "+p.n+" as drafted by someone else";
     b.onclick=()=>{ ingestPick(p.n,{src:"tap",conf:1}); render(); };
     box.appendChild(b);
