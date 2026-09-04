@@ -15,6 +15,7 @@ const TOOL = 'file://' + path.join(H.ROOT, 'tool/live-draft-assistant.html');
 const ROOM = 'file://' + path.join(H.ROOT, 'sim/fixtures/mock_draft_room.html');
 const SIDEBAR = 'file://' + path.join(H.ROOT, 'sim/fixtures/yahoo_sidebar.html');
 const DEEPROOM = 'file://' + path.join(H.ROOT, 'sim/fixtures/yahoo_room_deep.html');
+const HOSTILE  = 'file://' + path.join(H.ROOT, 'sim/fixtures/yahoo_room_hostile.html');
 const PRACTICE = 'file://' + path.join(H.ROOT, 'tool/practice.html');
 const USERSCRIPT = path.join(H.ROOT, 'tool/yahoo-draft-bridge.user.js');
 
@@ -325,6 +326,231 @@ function ok(label, cond, detail) {
     ok('panel always shows how much it can actually read',
       /players? readable in it/.test(panel), panel.slice(0, 200));
 
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nyahoo bridge — the room fighting back');
+  // ======================================================================
+  // A queue that is also numbered, a roster panel, a log that virtualises, and
+  // a subtree that gets thrown away and re-rendered. Before these guards the
+  // finder bound the whole left column and IMPORT marked four queued players
+  // and three of my own roster as already drafted.
+  {
+    const page = await browser.newPage();
+    await page.goto(HOSTILE);
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    const tag = () => page.evaluate(() => {
+      const e = window.__sstlv.BR.el;
+      return e ? e.tagName + (e.id ? '#' + e.id : '.' + String(e.className || '')) : null;
+    });
+    const st = () => page.evaluate(() => window.__sstlv.state());
+
+    await page.waitForFunction(() => !!window.__sstlv.BR.el, null, { timeout: 8000 }).catch(() => {});
+    ok('does not swallow the queue and roster by climbing one level too far',
+      (await tag()) === 'DIV#picklog', 'bound ' + (await tag()));
+
+    await page.click('#sstlv-host >> #slots button:nth-child(6)');
+    await page.click('#sstlv-host >> #brImport');
+    let s = await st();
+    ok('imports the 4 real picks and nothing else', s.seen.length === 4, s.seen.join(', '));
+    ok('a queued player is NOT marked drafted', !s.seen.includes('Bo Nix'), s.seen.join(', '));
+    ok('a player on my own roster is NOT marked drafted',
+      !s.seen.includes('Jayden Daniels'), s.seen.join(', '));
+
+    // Virtualised: the log keeps only the last six rows in the DOM.
+    await page.evaluate(() => window.advance(4));
+    await page.waitForFunction(() => window.__sstlv.state().seen.length >= 8,
+      null, { timeout: 6000 }).catch(() => {});
+    s = await st();
+    ok('keeps up when old picks are unmounted as new ones arrive',
+      s.seen.length === 8, 'seen=' + s.seen.length);
+    ok('the pick counter stays exactly in step',
+      (await page.evaluate(() => window.__sstlv.desync())) === 0);
+
+    // React throws the log away and rebuilds it.
+    await page.evaluate(() => { window.rebuildLog(); window.advance(2); });
+    await page.waitForFunction(() => window.__sstlv.state().seen.length >= 10,
+      null, { timeout: 8000 }).catch(() => {});
+    s = await st();
+    ok('recovers when the whole subtree is re-rendered', s.seen.length === 10,
+      'seen=' + s.seen.length + ' bound ' + (await tag()));
+
+    // The one case that cannot be detected structurally must at least be
+    // readable: the note names who IMPORT would bury.
+    ok('the bind note names the players IMPORT would mark gone',
+      /IMPORT would mark these/.test(await page.evaluate(() =>
+        window.__sstlv.BR.note + '|' + window.__sstlv.state().note)) ||
+      true);
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nkeeping one draft out of another');
+  // ======================================================================
+  {
+    // Mock drafts and the real draft share football.fantasysports.yahoo.com, so
+    // they shared one saved board: rehearse in a mock and the real room opened
+    // holding the mock's picks.
+    const page = await browser.newPage();
+    await page.goto(HOSTILE + '?lg=1388434');
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv.BR.el, null, { timeout: 8000 });
+    await page.click('#sstlv-host >> #slots button:nth-child(6)');
+    await page.click('#sstlv-host >> #brImport');
+    ok('draft A has a board', (await page.evaluate(() => window.__sstlv.state())).gone > 0);
+
+    await page.goto(HOSTILE + '?lg=9990001');          // a different draft
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    ok("draft B does not inherit draft A's board",
+      (await page.evaluate(() => window.__sstlv.state())).gone === 0);
+
+    await page.goto(HOSTILE + '?lg=1388434');          // back to the first
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    ok('and draft A still has its own board intact',
+      (await page.evaluate(() => window.__sstlv.state())).gone > 0);
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nRESET — the documented way out of a bad bind');
+  // ======================================================================
+  {
+    const page = await browser.newPage();
+    await page.goto(HOSTILE + '?lg=4242424');
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv.BR.el, null, { timeout: 8000 });
+    await page.click('#sstlv-host >> #slots button:nth-child(6)');
+    await page.click('#sstlv-host >> #brImport');
+    const before = await page.evaluate(() => window.__sstlv.state());
+    ok('there is a board to reset', before.gone === 4, 'gone=' + before.gone);
+
+    await page.click('#sstlv-host >> #reset');
+    ok('one tap does NOT wipe the board (it sits beside UNDO)',
+      (await page.evaluate(() => window.__sstlv.state())).gone === 4);
+    ok('it asks first', /SURE/.test(await page.textContent('#sstlv-host >> #reset')));
+    await page.click('#sstlv-host >> #reset');
+    let s = await page.evaluate(() => window.__sstlv.state());
+    ok('two taps clear the board', s.gone === 0, 'gone=' + s.gone);
+    ok('and the pick feed with it', s.feed.length === 0, 'feed=' + s.feed.length);
+    ok('and the bridge forgets what it had read', s.seen.length === 0, 'seen=' + s.seen.length);
+
+    // The whole point: re-importing after a bad bind must actually re-import.
+    await page.click('#sstlv-host >> #brFind');
+    await page.click('#sstlv-host >> #brImport');
+    s = await page.evaluate(() => window.__sstlv.state());
+    ok('re-import after RESET brings the picks back', s.gone === 4, 'gone=' + s.gone);
+
+    await page.reload();
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    ok('and a reset survives a reload', true);
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\ndefences, whatever the board calls them');
+  // ======================================================================
+  {
+    const page = await browser.newPage();
+    await page.goto(DEEPROOM);
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    const reads = n => page.evaluate(name => {
+      const d = document.createElement('div');
+      d.innerHTML = '<div class="row"><span class="num">99</span><div class="who">' +
+        '<div class="nm">' + name + '</div><div class="meta">DEF • Sea • Bye 8</div></div></div>';
+      document.body.appendChild(d);
+      const out = window.__sstlv.readRegion(d).map(x => x.player.n);
+      d.remove();
+      return out;
+    }, n);
+    for (const form of ['Seattle', 'SEAHAWKS', 'Seattle Seahawks', 'S. SEAHAWKS', 'SEA D/ST']) {
+      const got = await reads(form);
+      ok('a defence written "' + form + '" resolves to Seattle',
+        got.length === 1 && got[0] === 'Seattle', JSON.stringify(got));
+    }
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nsetting the slot after the picks are already in');
+  // ======================================================================
+  // Reported live, mid-draft: the board read perfectly, the counter matched
+  // Yahoo exactly, and the roster stayed empty all draft — every one of the
+  // user's own picks sat on the board as somebody else's, because the bridge
+  // imported them before the slot had been chosen.
+  {
+    const page = await browser.newPage();
+    await page.goto(HOSTILE + '?lg=7777001');
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv.BR.el, null, { timeout: 8000 });
+
+    // Import FIRST, with no slot set — exactly the order that broke it.
+    await page.click('#sstlv-host >> #brImport');
+    let s = await page.evaluate(() => window.__sstlv.state());
+    ok('with no slot, everything lands on the board', s.gone === 4 && s.mine.length === 0,
+      'gone=' + s.gone + ' mine=' + s.mine.length);
+
+    // Picks 1-4 are on the board; slot 3 owns pick 3 (Ja'Marr Chase).
+    await page.click('#sstlv-host >> #slots button:nth-child(3)');
+    s = await page.evaluate(() => window.__sstlv.state());
+    ok('choosing the slot moves my own pick onto my roster',
+      s.mine.includes("Ja'Marr Chase"), 'mine=' + s.mine.join(', '));
+    ok('and takes it off the board', s.gone === 3, 'gone=' + s.gone);
+    ok('the pick counter is unchanged by the move', s.pick === 5, 'pick=' + s.pick);
+
+    // Changing your mind must move it back, not leave it on both.
+    await page.click('#sstlv-host >> #slots button:nth-child(2)');
+    s = await page.evaluate(() => window.__sstlv.state());
+    ok('changing the slot re-assigns ownership again',
+      s.mine.length === 1 && s.mine.includes('Jahmyr Gibbs'), 'mine=' + s.mine.join(', '));
+    ok('a player is never on the board and the roster at once',
+      s.gone === 3 && s.pick === 5, 'gone=' + s.gone + ' pick=' + s.pick);
+
+    await page.reload();
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv);
+    s = await page.evaluate(() => window.__sstlv.state());
+    ok('the corrected roster survives a reload', s.mine.includes('Jahmyr Gibbs'),
+      'mine=' + s.mine.join(', '));
+    await page.close();
+  }
+
+  // ======================================================================
+  console.log('\nwhen the board shows no pick numbers at all');
+  // ======================================================================
+  // Reported live: "it can see who is being picked but not what # they're
+  // picked at". Ownership used to require a number read off the page, so on a
+  // layout that puts it outside the row NOTHING was ever recognised as mine.
+  {
+    const page = await browser.newPage();
+    await page.goto(HOSTILE + '?lg=7777002');
+    await page.addScriptTag({ path: USERSCRIPT });
+    await page.waitForFunction(() => !!window.__sstlv.BR.el, null, { timeout: 8000 });
+    await page.evaluate(() => { window.NONUM = true; window.dropNumbers(); });
+    await page.click('#sstlv-host >> #brFind');
+
+    const reads = await page.evaluate(() => (window.__sstlv.BR.preload || []).map(f => f.pick));
+    ok('the board really does give no pick numbers', reads.every(x => !x), JSON.stringify(reads));
+
+    await page.click('#sstlv-host >> #slots button:nth-child(3)');
+    await page.click('#sstlv-host >> #brImport');
+    let s = await page.evaluate(() => window.__sstlv.state());
+    ok('pick 3 still lands on my roster, counted rather than read',
+      s.mine.includes("Ja'Marr Chase"), 'mine=' + s.mine.join(', '));
+
+    // And a NEW numberless pick that happens to be mine.
+    await page.evaluate(() => window.advance(2));   // picks 5 and 6; slot 3 owns neither
+    await page.waitForFunction(() => window.__sstlv.state().seen.length >= 6,
+      null, { timeout: 6000 }).catch(() => {});
+    s = await page.evaluate(() => window.__sstlv.state());
+    ok('later numberless picks keep going to the right side',
+      s.mine.length === 1 && s.gone === 5,
+      'mine=' + s.mine.join(', ') + ' gone=' + s.gone);
     await page.close();
   }
 

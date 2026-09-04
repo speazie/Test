@@ -75,7 +75,9 @@ board persists across a reload, so nothing is lost if the page refreshes.
 1. Open the Yahoo draft room. A yellow **SSTLV** tab appears top-right; the
    panel opens beside the board. Click the tab to collapse it.
 2. **Set your draft slot** (the row of numbers 1–10). Pick **6**. Nothing
-   detects which picks are yours until you do this.
+   detects which picks are yours until you do this — and if picks are already
+   in when you set it, the tool moves your own ones onto your roster
+   retroactively, so the order does not matter any more.
 3. **Check the bridge box.** Within a few seconds it should say it found the
    pick list by itself, and the line under the buttons should read
    *"watching &lt;div…&gt; — **n** players readable in it"*. If **n** is 0 or the
@@ -203,6 +205,8 @@ your user-agent, which is what I need to fix it.
 | Says LIVE but nothing lands | Hit **DIAGNOSE**. It prints the rows the reader is actually seeing and what it made of each one — see below. |
 | Panel covers the draft board | Click the yellow SSTLV tab to collapse it. |
 | Someone is watching your screen | **HIDE** blanks the reasoning. |
+| Your own picks land on the board, not your roster | Tap your slot number again — that re-assigns every pick already in. |
+| You rehearsed in a mock first | Nothing to do. Each draft now keeps its own saved board; the mock cannot leak into the real one. |
 
 ### DIAGNOSE — when it claims to be working and isn't
 

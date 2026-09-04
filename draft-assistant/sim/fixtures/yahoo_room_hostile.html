@@ -1,0 +1,81 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Yahoo room (hostile)</title>
+<style>body{background:#12141c;color:#e9eef3;font:13px system-ui;margin:0;display:flex}
+#left{width:300px}#right{flex:1;padding:8px}
+.pk{padding:6px;border-bottom:1px solid #232838}
+.num{color:#8a93a5;font-weight:700;margin-right:6px}
+.meta{color:#98a1b3;font-size:11px}
+.hidden{display:none}
+</style></head><body>
+<!-- Everything about the live room that could break the reader, in one page:
+       * a QUEUE list that is also numbered 1..n and full of players, sitting
+         right next to the pick log (Yahoo has these as two tabs)
+       * a MY TEAM roster panel, also full of players, no pick numbers
+       * a pick log that VIRTUALISES: only the last 6 picks stay in the DOM
+       * a REBUILD button that throws the whole log away and re-renders it,
+         the way a React re-render does -- detaching whatever was bound. -->
+<div id="left">
+  <div id="queueTab" class="hidden">
+    <div class="pk"><span class="num">1</span> B. NIX <span class="meta">QB • Den • Bye 12</span></div>
+    <div class="pk"><span class="num">2</span> K. PITTS SR. <span class="meta">TE • Atl • Bye 5</span></div>
+    <div class="pk"><span class="num">3</span> C. OLAVE <span class="meta">WR • NO • Bye 11</span></div>
+    <div class="pk"><span class="num">4</span> T. HIGGINS <span class="meta">WR • Cin • Bye 6</span></div>
+  </div>
+  <div id="picksTab"><div id="picklog"></div></div>
+  <div id="myteam">
+    <div class="pk">J. DANIELS <span class="meta">QB • Was • Bye 14</span></div>
+    <div class="pk">D. LONDON <span class="meta">WR • Atl • Bye 5</span></div>
+    <div class="pk">N. COLLINS <span class="meta">WR • Hou • Bye 6</span></div>
+  </div>
+</div>
+<div id="right"><div id="avail"></div></div>
+<script>
+var PICKS = [
+ [1,'B. ROBINSON','RB • Atl • Bye 5'], [2,'J. GIBBS','RB • Det • Bye 6'],
+ [3,'J. CHASE','WR • Cin • Bye 6'],    [4,'P. NACUA','WR • LAR • Bye 11'],
+ [5,'A. ST. BROWN','WR • Det • Bye 6'],[6,'C. MCCAFFREY','RB • SF • Bye 8'],
+ [7,'S. BARKLEY','RB • Phi • Bye 10'], [8,'J. TAYLOR','RB • Ind • Bye 13'],
+ [9,'D. ACHANE','RB • Mia • Bye 12'],  [10,'T. MCBRIDE','TE • Ari • Bye 8']
+];
+var shown = 0;
+var VIRTUAL = 6;                 // only this many picks stay in the DOM
+function paint() {
+  var log = document.getElementById('picklog');
+  log.innerHTML = '';
+  PICKS.slice(0, shown).slice(-VIRTUAL).forEach(function (r) {
+    var d = document.createElement('div'); d.className = 'pk';
+    d.innerHTML = '<span class="num">' + r[0] + '</span> ' + r[1] +
+      ' <span class="meta">' + r[2] + '</span>';
+    log.appendChild(d);
+  });
+}
+window.NONUM = false;
+window.advance = function (n) { shown = Math.min(PICKS.length, shown + (n || 1)); paint(); if (window.NONUM) window.dropNumbers(); };
+window.rebuildLog = function () {          // React throws the subtree away
+  var tab = document.getElementById('picksTab');
+  tab.innerHTML = '<div id="picklog"></div>';
+  paint();
+};
+// 60 available players on the right, name first (no leading pick number)
+var NAMES = ['J. JEFFERSON','C. LAMB','G. WILSON','D. SMITH','Z. FLOWERS','R. ODUNZE',
+ 'J. WADDLE','C. RIDLEY','K. WILLIAMS','J. CONNER','A. KAMARA','T. ETIENNE JR.',
+ 'R. WHITE','B. IRVING','T. BIGSBY','I. PACHECO','T. POLLARD','N. CHUBB','R. STEVENSON','A. GIBSON'];
+var av = document.getElementById('avail');
+for (var i = 0; i < NAMES.length; i++) {
+  var d = document.createElement('div'); d.className = 'pk';
+  d.innerHTML = NAMES[i] + ' <span class="meta">WR • Min • Bye 6</span> ' + (i + 1) + ' ' + (i + 2.5);
+  av.appendChild(d);
+}
+// Some layouts put the pick number in a separate column outside the row, so
+// the reader never sees one. Ownership must still work: the tool's own counter
+// is correct whenever it agrees with the board.
+window.dropNumbers = function () {
+  var log = document.getElementById('picklog');
+  Array.prototype.forEach.call(log.querySelectorAll('.num'), function (n) { n.remove(); });
+};
+window.showQueue = function (on) {
+  document.getElementById('queueTab').className = on ? '' : 'hidden';
+  document.getElementById('picksTab').className = on ? 'hidden' : '';
+};
+advance(4);
+</script>
+</body></html>

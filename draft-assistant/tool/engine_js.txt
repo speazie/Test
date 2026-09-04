@@ -293,6 +293,30 @@ function markGone(n){ if(gone.has(n)||mine.includes(n))return; goneAt[n]=curPick
 function unGone(n){ gone.delete(n); delete goneAt[n]; render(); }
 function takeIt(n){ if(mine.includes(n))return; if(mine.length>=ROUNDS){alert("You already have 15 picks - that is the whole draft.");return;} takenAt[n]=curPick(); gone.delete(n); hist.push(["m",n]); mine.push(n); render(); }
 function unTake(n){ mine=mine.filter(x=>x!==n); render(); }
+
+// Setting the draft slot AFTER picks are already in is the normal order of
+// events now that the bridge binds and imports itself before you have touched
+// anything -- and it left your own picks sitting on the board as other
+// people's, with an empty roster and "15 picks left" all draft. Ownership is
+// fully recoverable: every pick carries the number it arrived on, so the slot
+// decides it whenever it is set or changed.
+function reclassifyBySlot(){
+  const ms=new Set(myPicks());
+  if(!ms.size) return 0;
+  let moved=0;
+  feed.forEach(r=>{
+    if(!r.pick) return;
+    const shouldBeMine=ms.has(r.pick);
+    if(shouldBeMine&&gone.has(r.n)&&mine.length<ROUNDS){
+      gone.delete(r.n); delete goneAt[r.n];
+      takenAt[r.n]=r.pick; mine.push(r.n); r.mine=true; moved++;
+    } else if(!shouldBeMine&&mine.includes(r.n)){
+      mine=mine.filter(x=>x!==r.n); delete takenAt[r.n];
+      goneAt[r.n]=r.pick; gone.add(r.n); r.mine=false; moved++;
+    }
+  });
+  return moved;
+}
 function undo(){ const h=hist.pop(); if(!h)return;
   if(h[0]==="g"){ gone.delete(h[1]); delete goneAt[h[1]]; }
   else { mine=mine.filter(x=>x!==h[1]); delete takenAt[h[1]]; } render(); }
@@ -587,6 +611,7 @@ function likelyNext(k){
 // came from so the feed can show it and so a bad auto-detect is one tap to undo.
 let feed=[];                 // newest last: {n, pick, src, conf, mine}
 let boardPick=null;          // pick number Yahoo says we are on, if readable
+let onReset=null;            // the bridge registers its own clean-up here
 let bridgeSeen=0;            // timestamp of the last successful board read
 
 function ingestPick(name,opt){
@@ -617,7 +642,16 @@ function render(){
   for(let i=1;i<=TEAMS;i++){
     const b=document.createElement("button");
     b.className="slot"; b.textContent=i; b.setAttribute("aria-pressed",i===slot);
-    b.onclick=()=>{slot=i;save();render();};
+    b.onclick=()=>{
+      slot=i;
+      const moved=reclassifyBySlot();
+      save(); render();
+      if(moved&&typeof BR!=="undefined"&&BR){
+        BR.note="Slot "+i+": moved "+moved+" pick"+(moved>1?"s":"")+
+          " off the board and onto YOUR roster.";
+        if(typeof renderBridgePanel==="function") renderBridgePanel();
+      }
+    };
     $("slots").appendChild(b);
   }
   const pick=curPick(), nm=nextMine();
@@ -886,6 +920,25 @@ function reconcile(){
 // localStorage is synchronous, needs no server, and survives a reload, which is
 // exactly the offline guarantee the tool is supposed to have.
 const LSKEY="sstlv-live-v2";
+// Yahoo mock drafts and the real draft room share one origin, so they shared
+// one saved board: rehearse in a mock, then open the real draft, and the tool
+// restores the MOCK's picks, roster and pick counter -- silently, because that
+// is exactly what restoring is supposed to look like. Keying the save by draft
+// keeps them apart and lets you move between them without losing either.
+//
+// The id is the longest 5+ digit run in the URL, which is the league number in
+// both of Yahoo's draft-room URL shapes; the offline file falls back to its
+// path. Getting it wrong costs an empty board that RE-IMPORT refills, which is
+// a great deal better than a board full of somebody else's mock draft.
+function draftId(){
+  try{
+    const runs=String(location.href||"").match(/\d{5,}/g);
+    if(runs&&runs.length) return "d"+runs.sort((a,b)=>b.length-a.length)[0];
+    return "p"+String(location.pathname||"file").replace(/[^a-z0-9]+/gi,"").slice(-20);
+  }catch(e){ return "file"; }
+}
+const DRAFT_ID=draftId();
+const SKEY=LSKEY+":"+DRAFT_ID;
 function store(){
   try{ if(typeof localStorage!=="undefined"&&localStorage) return localStorage; }catch(e){}
   return null;   // private mode / file:// restrictions in some browsers
@@ -895,13 +948,21 @@ function save(){
   const st=store();
   if(!st){ if(!saveWarned){ saveWarned=true; console.warn("no localStorage: state will not survive a reload"); } return; }
   try{
-    st.setItem(LSKEY,JSON.stringify({slot,gone:[...gone],mine,takenAt,goneAt,sortMode,feed,boardPick,v:2}));
+    st.setItem(SKEY,JSON.stringify({slot,gone:[...gone],mine,takenAt,goneAt,sortMode,feed,boardPick,v:2}));
   }catch(e){ if(!saveWarned){ saveWarned=true; console.warn("save failed:",e); } }
 }
 function load(){
   const st=store();
   try{
-    const raw=st&&st.getItem(LSKEY);
+    let raw=st&&st.getItem(SKEY);
+    if(!raw&&st){
+      // One-time migration off the un-namespaced key, so upgrading the script
+      // MID-DRAFT does not throw the live board away. It is CONSUMED, not
+      // copied: the next draft you open starts clean instead of inheriting
+      // this one, which is the whole point of namespacing.
+      const legacy=st.getItem(LSKEY);
+      if(legacy){ raw=legacy; try{ st.setItem(SKEY,legacy); st.removeItem(LSKEY); }catch(e){} }
+    }
     if(raw){
       const d=JSON.parse(raw);
       slot=d.slot||null; gone=new Set(d.gone||[]); mine=d.mine||[];
@@ -945,7 +1006,27 @@ $("addBtn").onclick=()=>{
   takeIt(nm); $("addName").value="";
 };
 $("undo").onclick=undo;
-$("reset").onclick=()=>{gone.clear();mine=[];hist=[];takenAt={};goneAt={};sortMode="value";render();};
+// RESET sits next to UNDO in the footer and used to fire on one tap, which is
+// a bad thing to have within a thumb's width of the button you press most.
+// It also left the pick feed, the board pick number and the bridge's own
+// record of what it had already read -- so the documented recovery from a bad
+// bind ("RESET and re-import") imported nothing, because the bridge still
+// believed it had seen those players. And it never saved, so a reload brought
+// the whole mess back.
+let resetArmed=0;
+$("reset").onclick=()=>{
+  const b=$("reset");
+  if(Date.now()-resetArmed>3000){
+    resetArmed=Date.now(); b.textContent="SURE?";
+    setTimeout(()=>{ if(Date.now()-resetArmed>=3000){ b.textContent="RESET"; } },3100);
+    return;
+  }
+  resetArmed=0; b.textContent="RESET";
+  gone.clear(); mine=[]; hist=[]; takenAt={}; goneAt={};
+  feed=[]; boardPick=null; sortMode="value";
+  if(typeof onReset==="function") onReset();
+  save(); render();
+};
 load();
 </script>
 </body>

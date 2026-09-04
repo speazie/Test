@@ -34,6 +34,10 @@ const BR = {
   note: "",
 };
 const BR_KEY = "sstlv-bridge-v1";
+// Namespaced by draft for the same reason the board is: a region path and a
+// list of already-read players from a mock draft are worse than useless in the
+// real room -- the seen-set would suppress the real picks.
+const BKEY = BR_KEY + ":" + DRAFT_ID;
 const BURST_LIMIT = 5;   // more additions than this in one scan = wrong region
 
 // ---- locating the container again after a reload ----
@@ -110,6 +114,10 @@ function rowsOf(container) {
     const t = rowText(el);
     if (!t || t.length > 160) return;          // a huge blob is a wrapper, not a row
     if (seenText.has(t)) return;
+    // You cannot draft from a list nobody can see. Yahoo keeps the QUEUE tab in
+    // the DOM with display:none right beside the pick log, and reading it marks
+    // four players you were HOPING to draft as already gone.
+    if (el.getClientRects && el.isConnected && el.getClientRects().length === 0) return;
     seenText.add(t);
     out.push({ el, text: t });
   };
@@ -166,6 +174,19 @@ function readRegion(el) {
   const dedupe = new Set();
   for (const row of rowsOf(el)) {
     const info = parseRow(row.text);
+    // A defence is identified by its TEAM, never by what the board calls it.
+    // Our pool stores the city ("Seattle"); Yahoo may print the nickname
+    // ("Seahawks"), both ("Seattle Seahawks"), or an abbreviation -- and every
+    // one of those except the bare city matched NOTHING. The team code is in
+    // the same cell and is unambiguous, so use it and skip name matching.
+    if (info.pos === "DST" && info.team) {
+      const d = PLAYERS.find(x => x.p === "DST" && norm(x.t) === norm(info.team));
+      if (d && !dedupe.has(d.n)) {
+        dedupe.add(d.n);
+        out.push({ player: d, conf: 1, pick: info.pick, alts: [], raw: row.text, stale: null });
+      }
+      continue;
+    }
     if (!plausibleName(info.name)) continue;
     const m = matchBoardName(info.name, { pos: info.pos, team: info.team });
     if (!m.p || dedupe.has(m.p.n)) continue;
@@ -217,7 +238,9 @@ function resolveContainer(el) {
   for (let up = 0; up < MAX_CLIMB && n && n !== document.body; up++) {
     if (n.getElementsByTagName && n.getElementsByTagName("*").length > MAX_SUBTREE) break;
     const reads = readRegion(n);
-    levels.push({ el: n, all: reads.length, withPick: reads.filter(r => r.pick).length });
+    const nums = reads.filter(r => r.pick).map(r => r.pick);
+    const dup = new Set(nums).size !== nums.length;   // merged with the queue
+    levels.push({ el: n, all: reads.length, withPick: dup ? 0 : nums.length });
     n = n.parentElement;
   }
   if (!levels.length) return el;
@@ -271,48 +294,66 @@ function resolveContainer(el) {
 // them parses a pick number, and the table as a whole reads far more players
 // than MAX_REGION.
 function autoFindPickList() {
+  // Seeds are the cheap part: leaf elements that look like they belong to a
+  // pick row. A bare small integer is a pick number; a position token is a
+  // player's meta line. Both are needed -- keying on integers alone meant that
+  // on a board with no pick numbers in the row, NOTHING inside the pick log
+  // was ever a seed, and the search went looking somewhere else entirely.
   const seeds = [];
   const all = document.body.getElementsByTagName("*");
-  for (let i = 0; i < all.length && seeds.length < 300; i++) {
+  for (let i = 0; i < all.length && seeds.length < 400; i++) {
     const e = all[i];
     if (e.children.length) continue;                 // leaves only, so this stays cheap
     if (HOST && HOST.contains(e)) continue;          // never our own panel
+    if (e.getClientRects && e.getClientRects().length === 0) continue;   // nobody can see it
     const t = (e.textContent || "").trim();
-    if (!/^\d{1,3}$/.test(t)) continue;
-    const v = +t;
-    if (v >= 1 && v <= 150) seeds.push(e);
+    if (!t || t.length > 60) continue;
+    const n = /^\d{1,3}$/.test(t) ? +t : 0;
+    if ((n >= 1 && n <= 150) || RE_POS.test(t)) seeds.push(e);
   }
 
-  const tried = new Set();
-  let numbered = null, plain = null;
-  const consider = n => {
-    if (tried.has(n)) return true;
-    tried.add(n);
-    if (n.getElementsByTagName("*").length > MAX_SUBTREE) return false;  // stop climbing
-    const reads = readRegion(n);
-    if (reads.length < 2 || reads.length > MAX_REGION) return true;
-    const withPick = reads.filter(r => r.pick).length;
-    const cand = { el: n, withPick: withPick, all: reads.length };
-    if (withPick >= 2) {
-      if (!numbered || cand.withPick > numbered.withPick ||
-          (cand.withPick === numbered.withPick && cand.all < numbered.all)) numbered = cand;
-    } else if (!plain || cand.all < plain.all) {
-      plain = cand;
+  // Each seed votes for the FIRST container above it that could be a list.
+  // Stopping there is the whole trick: climbing past it is how the search
+  // walked out of the pick log and into the column holding the pick log, the
+  // queue AND my own roster -- which then scored better for having more in it.
+  const cache = new Map();
+  const evaluate = n => {
+    if (cache.has(n)) return cache.get(n);
+    let v = null;
+    if (n.getElementsByTagName("*").length <= MAX_SUBTREE) {
+      const reads = readRegion(n);
+      const nums = reads.filter(r => r.pick).map(r => r.pick);
+      // A real pick log never lists the same pick number twice; a log merged
+      // with the numbered queue beside it does.
+      const dup = new Set(nums).size !== nums.length;
+      // And a region that names itself is telling the truth about what it is.
+      const named = /\b(queue|watch\s*list|my\s*team|bench|starters|taxi)\b/i.test(n.textContent || "");
+      if (reads.length >= 2 && reads.length <= MAX_REGION && !dup && !named) {
+        v = { el: n, withPick: nums.length, all: reads.length, votes: 0 };
+      }
     }
-    return true;
+    cache.set(n, v);
+    return v;
   };
 
+  const found = [];
   for (const seed of seeds) {
     let n = seed.parentElement;
     for (let up = 0; up < MAX_CLIMB && n && n !== document.body; up++, n = n.parentElement) {
-      if (!consider(n)) break;
+      if (n.getElementsByTagName("*").length > MAX_SUBTREE) break;
+      const c = evaluate(n);
+      if (c) { if (!c.votes) found.push(c); c.votes++; break; }
     }
   }
-  // A numbered list is a pick log. A list with no numbers might be one too --
-  // some rooms only number the current pick -- so it is offered second rather
-  // than not at all.
-  const best = numbered || plain;
-  return best ? { el: best.el, picks: best.withPick, players: best.all } : null;
+  if (!found.length) return null;
+  // Pick numbers settle it outright when they exist: only a pick log numbers
+  // its rows, and no amount of being large makes an available-players table a
+  // pick log. Votes decide only among candidates that are equally unnumbered.
+  found.sort((a, b) =>
+    (b.withPick >= 2) - (a.withPick >= 2) ||
+    b.votes - a.votes || b.withPick - a.withPick || a.all - b.all);
+  const best = found[0];
+  return { el: best.el, picks: best.withPick, players: best.all };
 }
 
 function bindTo(el, how) {
@@ -324,6 +365,7 @@ function bindTo(el, how) {
   const found = scanRegion();
   BR.pending = [];
   BR.preload = found;
+  BR.preloadNames = found.map(f => f.player.n);
   BR.note = describeBind(found.length, how);
   renderBridgePanel();
   renderBridge();
@@ -342,17 +384,28 @@ function describeBind(n, how) {
       "If picks are already showing on the board, this is the wrong region: " +
       "tap FIND IT, or DIAGNOSE to see what it is looking at.";
   }
-  return where + "Bound. " + n + " player" + (n > 1 ? "s" : "") + " already on the board — " +
-    "IMPORT " + (n > 1 ? "them" : "him") +
-    (BR.armed ? "." : ", or ARM to only take picks from here on.");
+  // Name them. IMPORT marks players GONE, and the way that goes wrong is by
+  // binding a list of players who are still AVAILABLE -- a queue, a roster,
+  // a watch list. No amount of container heuristics beats reading four names
+  // and knowing instantly that they have not been drafted.
+  const who = (BR.preloadNames || []).slice(0, 6).join(", ") +
+    ((BR.preloadNames || []).length > 6 ? ", …" : "");
+  return where + "Bound. IMPORT would mark these " + n + " as ALREADY DRAFTED: " +
+    who + ". If any of them is still available, this is the wrong list — tap FIND IT." +
+    (BR.armed ? "" : " ARM instead to take only picks from here on.");
 }
 
 // One pass over the bound container. Returns the reads it has not seen before.
 function scanRegion() {
   if (!BR.el || !document.contains(BR.el)) {
-    const again = elFromPath(BR.path);
-    if (!again) { BR.note = "lost the board region — rebind it"; return []; }
+    let again = elFromPath(BR.path);
+    // A re-render can move the log somewhere the saved index path no longer
+    // reaches. Look for it again before declaring defeat; the alternative is a
+    // dead bridge nobody notices until three picks have gone by.
+    if (!again) { const a = autoFindPickList(); if (a) again = a.el; }
+    if (!again) { BR.note = "lost the board region — tap FIND IT, or rebind it"; return []; }
     BR.el = again;
+    BR.path = elPath(again);
   }
   const all = readRegion(BR.el);
   let maxPick = 0;
@@ -390,8 +443,14 @@ function bridgeTick() {
     // Never auto-commit a shaky read. It goes to the confirm strip, where it is
     // one tap — still no typing, but a wrong guess cannot slip through.
     if (f.conf < AUTO_COMMIT) { BR.pending.push(f); continue; }
-    const isMine = f.pick ? myPickSet.has(f.pick) : false;
-    ingestPick(f.player.n, { src: "board", conf: f.conf, pick: f.pick || undefined,
+    // If the board did not hand us a pick number, use our own counter. It is
+    // right whenever the count agrees with Yahoo -- which the desync banner
+    // already polices -- and requiring a number off the page meant that on a
+    // layout where the number is not inside the row, NOTHING was ever
+    // recognised as yours: an empty roster and "15 picks left" all draft.
+    const at = f.pick || curPick();
+    const isMine = myPickSet.has(at);
+    ingestPick(f.player.n, { src: "board", conf: f.conf, pick: at,
                              mine: isMine, note: f.stale });
   }
   BR.lastCount = BR.seen.size;
@@ -417,14 +476,33 @@ function rejectPending(i) {
   renderBridgePanel();
 }
 
+// Wired into the engine's RESET. Without this, resetting after a bad bind left
+// the bridge convinced it had already read every player it wrongly committed,
+// so re-importing the correct region brought back nothing at all.
+onReset = function () {
+  BR.seen = new Set();
+  BR.pending = [];
+  BR.preload = [];
+  BR.lastCount = 0;
+  BR.paused = false;
+  BR.note = "Board cleared. IMPORT or ARM again when the region is right.";
+  saveBridge();
+  renderBridgePanel();
+};
+
 function saveBridge() {
   try {
-    localStorage.setItem(BR_KEY, JSON.stringify({ path: BR.path, seen: [...BR.seen], armed: BR.armed }));
+    localStorage.setItem(BKEY, JSON.stringify({ path: BR.path, seen: [...BR.seen], armed: BR.armed }));
   } catch (e) {}
 }
 function loadBridge() {
   try {
-    const d = JSON.parse(localStorage.getItem(BR_KEY) || "null");
+    let rawB = localStorage.getItem(BKEY);
+    if (!rawB) {
+      const legacy = localStorage.getItem(BR_KEY);
+      if (legacy) { rawB = legacy; try { localStorage.setItem(BKEY, legacy); localStorage.removeItem(BR_KEY); } catch (e) {} }
+    }
+    const d = JSON.parse(rawB || "null");
     if (!d) return;
     BR.path = d.path || null;
     BR.seen = new Set(d.seen || []);
@@ -519,8 +597,8 @@ function importPreload() {
   list.sort((a, b) => (a.pick || 999) - (b.pick || 999));
   for (const f of list) {
     BR.seen.add(f.player.n);
-    const isMine = f.pick ? myPickSet.has(f.pick) : false;
-    ingestPick(f.player.n, { src: "import", conf: f.conf, pick: f.pick || undefined, mine: isMine });
+    const at = f.pick || curPick();
+    ingestPick(f.player.n, { src: "import", conf: f.conf, pick: at, mine: myPickSet.has(at) });
   }
   BR.preload = [];
   BR.armed = true;
@@ -677,7 +755,7 @@ if (BR.armed) bridgeTick();
 // is actually reading when something looks wrong. Console-only, no UI.
 window.__sstlv = {
   BR, scanRegion, bridgeTick, matchBoardName, searchPlayers, ingestPick, diagnose,
-  autoFindPickList, findItForMe, resolveContainer,
+  autoFindPickList, findItForMe, resolveContainer, readRegion, parseRow,
   curPick, desync, likelyNext,
   state: () => ({
     bound: !!BR.el, armed: BR.armed, paused: BR.paused,
